@@ -70,11 +70,36 @@ const History = {
     `;
     
     // Add tab content to container
-    document.querySelector('.tabs').parentNode.appendChild(tabContent);
+    document.querySelector('.container').appendChild(tabContent);
     
     // Add search/filter functionality
     document.getElementById('historySearch').addEventListener('input', this.refreshHistoryDisplay.bind(this));
     document.getElementById('historyFilter').addEventListener('change', this.refreshHistoryDisplay.bind(this));
+  
+    // IMPORTANT: Manually add the event listener for the history tab
+    // This is necessary because the tab is added after UI.initTabs() is called
+    historyTab.addEventListener('click', () => {
+      // Require PIN authentication
+      if (typeof PinAuth !== 'undefined') {
+        PinAuth.verifyPin(() => {
+          // This runs after successful PIN verification
+          
+          // Remove active class from all tabs and contents
+          document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+          document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+          
+          // Add active class to history tab and content
+          historyTab.classList.add('active');
+          tabContent.classList.add('active');
+          
+          // Refresh history display
+          this.refreshHistoryDisplay();
+        });
+      } else {
+        console.error('PinAuth module not available');
+        alert('PIN Authentication system is not available. Unable to access history.');
+      }
+    });
   },
   
   // Set up handlers to save quotes and invoices
