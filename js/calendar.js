@@ -1,6 +1,7 @@
 /**
  * Calendar Module
  * Handles availability calendar and date management
+ * Now with GitHub integration
  */
 
 const Calendar = {
@@ -9,10 +10,19 @@ const Calendar = {
   blockedDates: {},
   bookedDates: {},
   modal: null,
+  useGitHub: false,
   
   // Initialize calendar module
-  init() {
-    this.loadAvailability();
+  async init() {
+    // Check if GitHub service is available and initialized
+    if (typeof GitHubService !== 'undefined' && GitHubService.isInitialized()) {
+      this.useGitHub = true;
+      console.log('Calendar module initialized with GitHub storage');
+    } else {
+      console.warn('GitHub service not initialized, using localStorage for calendar data');
+    }
+    
+    await this.loadAvailability();
     this.createCalendarTab();
     this.setupEventListeners();
     this.renderCalendar();
@@ -22,8 +32,42 @@ const Calendar = {
     this.setupDateValidation();
   },
   
-  // Load availability data from local storage
-  loadAvailability() {
+  // Load availability data from repository
+  async loadAvailability() {
+    if (this.useGitHub) {
+      try {
+        // Get availability data from GitHub
+        const availabilityData = await GitHubService.getFileContent('data/calendar/availability.json');
+        
+        if (availabilityData) {
+          this.blockedDates = availabilityData.blockedDates || {};
+          this.bookedDates = availabilityData.bookedDates || {};
+          
+          // Update app state
+          AppState.availability = {
+            blockedDates: this.blockedDates,
+            bookedDates: this.bookedDates
+          };
+          
+          console.log('Availability data loaded from GitHub');
+        } else {
+          console.log('No availability data found in GitHub repository, initializing empty');
+          this.blockedDates = {};
+          this.bookedDates = {};
+        }
+      } catch (error) {
+        console.error('Error loading availability data from GitHub:', error);
+        // Fallback to localStorage
+        this.loadAvailabilityFromLocalStorage();
+      }
+    } else {
+      // Load from localStorage
+      this.loadAvailabilityFromLocalStorage();
+    }
+  },
+  
+  // Load availability data from localStorage (fallback)
+  loadAvailabilityFromLocalStorage() {
     try {
       const savedBlockedDates = localStorage.getItem('blockedDates');
       const savedBookedDates = localStorage.getItem('bookedDates');
@@ -42,27 +86,64 @@ const Calendar = {
         bookedDates: this.bookedDates
       };
       
-      console.log('Availability data loaded');
+      console.log('Availability data loaded from localStorage');
     } catch (error) {
-      console.error('Error loading availability data:', error);
+      console.error('Error loading availability data from localStorage:', error);
+      this.blockedDates = {};
+      this.bookedDates = {};
     }
   },
   
-  // Save availability data to local storage
-  saveAvailability() {
+  // Save availability data to repository
+  async saveAvailability() {
+    if (this.useGitHub) {
+      try {
+        // Prepare data object
+        const availabilityData = {
+          blockedDates: this.blockedDates,
+          bookedDates: this.bookedDates,
+          lastUpdated: new Date().toISOString()
+        };
+        
+        // Save to GitHub
+        const result = await GitHubService.saveFile(
+          'data/calendar/availability.json',
+          availabilityData,
+          'Update calendar availability data'
+        );
+        
+        if (result) {
+          console.log('Availability data saved to GitHub');
+        } else {
+          console.error('Failed to save availability data to GitHub');
+          // Fallback to localStorage
+          this.saveAvailabilityToLocalStorage();
+        }
+      } catch (error) {
+        console.error('Error saving availability data to GitHub:', error);
+        // Fallback to localStorage
+        this.saveAvailabilityToLocalStorage();
+      }
+    } else {
+      // Save to localStorage
+      this.saveAvailabilityToLocalStorage();
+    }
+    
+    // Update app state regardless of storage method
+    AppState.availability = {
+      blockedDates: this.blockedDates,
+      bookedDates: this.bookedDates
+    };
+  },
+  
+  // Save availability data to localStorage (fallback)
+  saveAvailabilityToLocalStorage() {
     try {
       localStorage.setItem('blockedDates', JSON.stringify(this.blockedDates));
       localStorage.setItem('bookedDates', JSON.stringify(this.bookedDates));
-      
-      // Update app state
-      AppState.availability = {
-        blockedDates: this.blockedDates,
-        bookedDates: this.bookedDates
-      };
-      
-      console.log('Availability data saved');
+      console.log('Availability data saved to localStorage');
     } catch (error) {
-      console.error('Error saving availability data:', error);
+      console.error('Error saving availability data to localStorage:', error);
     }
   },
   
@@ -94,11 +175,65 @@ const Calendar = {
         calendarTab.classList.add('active');
         document.getElementById('calendar').classList.add('active');
         
+        // Add GitHub sync button if using GitHub
+        this.updateCalendarHeader();
+        
         // Refresh calendar when tab is shown
         this.renderCalendar();
         this.renderUpcomingBookings();
       });
     });
+  },
+  
+  // Update calendar header with GitHub sync button
+  updateCalendarHeader() {
+    const calendar = document.getElementById('calendar');
+    if (!calendar) return;
+    
+    // Check if sync elements already exist
+    let syncContainer = calendar.querySelector('#calendarGitHubSyncContainer');
+    
+    if (!syncContainer) {
+      syncContainer = document.createElement('div');
+      syncContainer.id = 'calendarGitHubSyncContainer';
+      syncContainer.style.cssText = `
+        margin-bottom: 1rem;
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+      `;
+      
+      const calendarControls = calendar.querySelector('.calendar-controls');
+      if (calendarControls) {
+        calendarControls.after(syncContainer);
+      }
+    }
+    
+    // Update sync container content
+    if (this.useGitHub) {
+      syncContainer.innerHTML = `
+        <div style="font-size: 0.875rem; color: var(--gray-600); margin-right: 0.5rem;">
+          <i class="fab fa-github"></i> Synced with GitHub
+        </div>
+        <button id="syncCalendarBtn" class="btn btn-sm btn-outline">
+          <i class="fas fa-sync"></i> Sync Now
+        </button>
+      `;
+      
+      // Add sync button listener
+      document.getElementById('syncCalendarBtn').addEventListener('click', async () => {
+        await this.loadAvailability();
+        this.renderCalendar();
+        this.renderUpcomingBookings();
+        alert('Calendar synchronized with GitHub repository');
+      });
+    } else {
+      syncContainer.innerHTML = `
+        <div style="font-size: 0.875rem; color: var(--gray-600);">
+          <i class="fas fa-database"></i> Using Local Storage
+        </div>
+      `;
+    }
   },
   
   // Set up event listeners
@@ -334,32 +469,34 @@ Client: ${booking.clientName || 'Unnamed Client'}
 Project: ${booking.projectName || 'Unnamed Project'}
 ${booking.projectLocation ? 'Location: ' + booking.projectLocation : ''}
 ${booking.notes ? 'Notes: ' + booking.notes : ''}
+${this.useGitHub ? 'Stored on GitHub: ' + GitHubService.owner + '/' + GitHubService.repo : ''}
     `);
   },
   
   // Show block details modal
-  showBlockDetails(dateStr) {
+  async showBlockDetails(dateStr) {
     const reason = this.blockedDates[dateStr];
     
     if (confirm(`
 Date Blocked: ${dateStr}
 Reason: ${reason || 'Personal unavailability'}
+${this.useGitHub ? 'Stored on GitHub: ' + GitHubService.owner + '/' + GitHubService.repo : ''}
 
 Would you like to unblock this date?
     `)) {
       delete this.blockedDates[dateStr];
-      this.saveAvailability();
+      await this.saveAvailability();
       this.renderCalendar();
     }
   },
   
   // Prompt to block date
-  promptBlockDate(dateStr) {
+  async promptBlockDate(dateStr) {
     const reason = prompt(`Block date ${dateStr}?\n\nEnter reason (optional):`, '');
     
     if (reason !== null) { // Not cancelled
       this.blockedDates[dateStr] = reason;
-      this.saveAvailability();
+      await this.saveAvailability();
       this.renderCalendar();
     }
   },
@@ -476,7 +613,7 @@ Would you like to unblock this date?
     });
     
     // Handle confirm button click
-    confirmBlockBtn.addEventListener('click', () => {
+    confirmBlockBtn.addEventListener('click', async () => {
       if (!blockStartDate.value || !blockEndDate.value) {
         alert('Please select a date range');
         return;
@@ -486,13 +623,13 @@ Would you like to unblock this date?
       const endDate = new Date(blockEndDate.value);
       const reason = content.querySelector('#blockReason').value;
       
-      this.blockDateRange(startDate, endDate, reason);
+      await this.blockDateRange(startDate, endDate, reason);
       this.modal.style.display = 'none';
     });
   },
   
   // Block a range of dates
-  blockDateRange(startDate, endDate, reason = '') {
+  async blockDateRange(startDate, endDate, reason = '') {
     // Clone date to avoid modifying the original
     let currentDate = new Date(startDate);
     
@@ -506,7 +643,7 @@ Would you like to unblock this date?
       currentDate.setDate(currentDate.getDate() + 1);
     }
     
-    this.saveAvailability();
+    await this.saveAvailability();
     this.renderCalendar();
     
     alert(`Dates blocked successfully from ${startDate.toLocaleDateString()} to ${endDate.toLocaleDateString()}`);
@@ -588,15 +725,132 @@ Would you like to unblock this date?
     });
   },
   
-  // Export calendar data to CSV or iCal
-  exportCalendar() {
-    // Implement export functionality
-    // For now, just show an alert
-    alert('Calendar export will be added in a future update.');
+  // Export calendar data
+  async exportCalendar() {
+    // Ask which format to export
+    const format = confirm('Export calendar data?\n\nClick OK to export as JSON, or Cancel to export as iCal format.');
+    
+    if (format) {
+      // Export as JSON
+      this.exportCalendarAsJSON();
+    } else {
+      // Export as iCal
+      this.exportCalendarAsICal();
+    }
+  },
+  
+  // Export calendar data as JSON
+  exportCalendarAsJSON() {
+    const data = {
+      blockedDates: this.blockedDates,
+      bookedDates: this.bookedDates,
+      exportedAt: new Date().toISOString()
+    };
+    
+    // Convert to JSON string
+    const jsonString = JSON.stringify(data, null, 2);
+    
+    // Create download link
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `calendar-export-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    
+    // Clean up
+    setTimeout(() => {
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    }, 0);
+  },
+  
+  // Export calendar as iCal format
+  exportCalendarAsICal() {
+    // Create iCal content
+    let icalContent = `BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//EmmettCalendar//EN
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+X-WR-CALNAME:Emmett's Production Calendar
+X-WR-TIMEZONE:UTC
+BEGIN:VTIMEZONE
+TZID:UTC
+END:VTIMEZONE
+`;
+    
+    // Add blocked dates
+    Object.keys(this.blockedDates).forEach(dateStr => {
+      const date = new Date(dateStr);
+      const reason = this.blockedDates[dateStr] || 'Unavailable';
+      const uid = 'blocked-' + dateStr;
+      
+      // Format date for iCal (YYYYMMDD)
+      const icalDate = dateStr.replace(/-/g, '');
+      
+      icalContent += `BEGIN:VEVENT
+UID:${uid}
+DTSTAMP:${new Date().toISOString().replace(/[-:.]/g, '').split('T')[0]}T000000Z
+DTSTART;VALUE=DATE:${icalDate}
+DTEND;VALUE=DATE:${icalDate}
+SUMMARY:BLOCKED - ${reason}
+DESCRIPTION:${reason}
+STATUS:CONFIRMED
+TRANSP:OPAQUE
+END:VEVENT
+`;
+    });
+    
+    // Add booked dates
+    Object.keys(this.bookedDates).forEach(dateStr => {
+      const booking = this.bookedDates[dateStr];
+      const uid = 'booked-' + dateStr;
+      
+      // Format date for iCal (YYYYMMDD)
+      const icalDate = dateStr.replace(/-/g, '');
+      
+      // Create summary and description
+      const summary = `${booking.clientName || 'Unnamed Client'} - ${booking.projectName || 'Unnamed Project'}`;
+      let description = `Client: ${booking.clientName || 'Unnamed Client'}\nProject: ${booking.projectName || 'Unnamed Project'}`;
+      if (booking.projectLocation) description += `\nLocation: ${booking.projectLocation}`;
+      if (booking.notes) description += `\nNotes: ${booking.notes}`;
+      
+      icalContent += `BEGIN:VEVENT
+UID:${uid}
+DTSTAMP:${new Date().toISOString().replace(/[-:.]/g, '').split('T')[0]}T000000Z
+DTSTART;VALUE=DATE:${icalDate}
+DTEND;VALUE=DATE:${icalDate}
+SUMMARY:${summary}
+DESCRIPTION:${description.replace(/\n/g, '\\n')}
+STATUS:${booking.depositPaid ? 'CONFIRMED' : 'TENTATIVE'}
+TRANSP:OPAQUE
+END:VEVENT
+`;
+    });
+    
+    // Close calendar
+    icalContent += 'END:VCALENDAR';
+    
+    // Create download link
+    const blob = new Blob([icalContent], { type: 'text/calendar' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `emmett-production-calendar-${new Date().toISOString().split('T')[0]}.ics`;
+    document.body.appendChild(a);
+    a.click();
+    
+    // Clean up
+    setTimeout(() => {
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+    }, 0);
   },
   
   // Book a date range for a client
-  bookDateRange(startDate, endDate, clientData) {
+  async bookDateRange(startDate, endDate, clientData) {
     // Clone date to avoid modifying the original
     let currentDate = new Date(startDate);
     
@@ -614,7 +868,7 @@ Would you like to unblock this date?
       currentDate.setDate(currentDate.getDate() + 1);
     }
     
-    this.saveAvailability();
+    await this.saveAvailability();
     
     // Add travel days if needed
     if (clientData.travelDays && clientData.travelDays > 0) {
@@ -650,7 +904,7 @@ Would you like to unblock this date?
         afterTravel.setDate(afterTravel.getDate() + 1);
       }
       
-      this.saveAvailability();
+      await this.saveAvailability();
     }
   }
 };
