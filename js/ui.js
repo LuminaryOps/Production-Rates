@@ -495,44 +495,64 @@ const UI = {
   
   // Print section
   printSection(sectionEl, title) {
+    // Get content to print
     const content = sectionEl.innerHTML;
-    const styles = document.querySelector('style').innerHTML;
     
+    // Create a new window for printing
     const printWindow = window.open('', '_blank', 'width=800,height=600');
+    
+    // Get all stylesheets from the document
+    const styleLinks = Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
+      .map(link => `<link rel="stylesheet" href="${link.href}">`).join('');
+    
+    // Also get any inline styles (just in case)
+    const inlineStyles = Array.from(document.querySelectorAll('style'))
+      .map(style => `<style>${style.innerHTML}</style>`).join('');
+    
+    // Write the document with proper styling
     printWindow.document.write(`
       <!DOCTYPE html>
       <html>
       <head>
         <title>Emmett's ${title}</title>
-        <style>${styles}</style>
+        ${styleLinks}
+        ${inlineStyles}
         <style>
-          body {
-            padding: 0;
-            margin: 0;
-            background: white;
-          }
-          .container {
-            max-width: 100%;
-            margin: 0;
-            padding: 40px;
-            box-shadow: none;
-            background-color: white;
-          }
-          .result-section {
-            display: block;
-          }
-          .btn-group {
-            display: none;
-          }
           @media print {
-            body, html {
-              width: 100%;
-              height: 100%;
-              margin: 0;
+            body {
               padding: 0;
+              margin: 0;
+              background: white !important;
+              color: black !important;
             }
             .container {
-              padding: 20px;
+              max-width: 100% !important;
+              margin: 0 !important;
+              padding: 20px !important;
+              box-shadow: none !important;
+              background-color: white !important;
+            }
+            .result-section {
+              display: block !important;
+            }
+            .btn-group, .btn, .dark-mode-toggle {
+              display: none !important;
+            }
+            .tabs {
+              display: none !important;
+            }
+            .card {
+              box-shadow: none !important;
+            }
+            /* Force color for readability */
+            h1, h2, h3, h4, h5, h6, p, td, th, div {
+              color: black !important;
+            }
+            th {
+              background-color: #f0f0f0 !important;
+            }
+            tr:hover td {
+              background-color: transparent !important;
             }
           }
         </style>
@@ -543,25 +563,33 @@ const UI = {
             ${content}
           </div>
         </div>
+        <script>
+          // Execute print once everything has loaded
+          window.onload = function() {
+            // Small delay to ensure styles are applied
+            setTimeout(() => {
+              window.focus();
+              window.print();
+              
+              // Close window after printing or if user cancels
+              window.addEventListener('afterprint', function() {
+                window.close();
+              });
+              
+              // Fallback close timer
+              setTimeout(() => {
+                if (!window.closed) {
+                  window.close();
+                }
+              }, 5000);
+            }, 500);
+          };
+        </script>
       </body>
       </html>
     `);
     
     printWindow.document.close();
-    printWindow.onload = function() {
-      setTimeout(() => {
-        printWindow.focus();
-        printWindow.print();
-        printWindow.addEventListener('afterprint', function() {
-          printWindow.close();
-        });
-        setTimeout(() => {
-          if (!printWindow.closed) {
-            printWindow.close();
-          }
-        }, 5000);
-      }, 300);
-    };
   },
   
   // Save as PDF
