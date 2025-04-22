@@ -8,6 +8,7 @@ const Signature = {
   ctx: null,
   isDrawing: false,
   modal: null,
+  hasSigned: false,
   
   // Initialize signature module
   init() {
@@ -18,6 +19,11 @@ const Signature = {
   createAcceptButton() {
     const quoteSection = document.getElementById('quoteSection');
     const btnGroup = quoteSection.querySelector('.btn-group');
+    
+    if (!btnGroup) {
+      console.error('Button group not found in quote section');
+      return;
+    }
     
     const acceptBtn = document.createElement('button');
     acceptBtn.id = 'acceptQuoteBtn';
@@ -38,11 +44,19 @@ const Signature = {
     
     // Reset form and canvas
     const form = this.modal.querySelector('form');
-    form.reset();
+    if (form) {
+      form.reset();
+    }
     this.clearCanvas();
+    this.hasSigned = false;
     
     // Show modal
     this.modal.style.display = 'flex';
+    
+    // Initialize canvas after modal is displayed to ensure correct dimensions
+    setTimeout(() => {
+      this.setupCanvas();
+    }, 100);
   },
   
   // Create the signature modal
@@ -144,6 +158,9 @@ const Signature = {
             I acknowledge and accept the terms, pricing, and cancellation policy outlined in this quote.
           </label>
         </div>
+        <div id="termsError" style="color: var(--danger); font-size: 0.875rem; display: none;">
+          You must accept the terms to continue.
+        </div>
       </div>
       
       <div style="display: flex; justify-content: center;">
@@ -159,22 +176,39 @@ const Signature = {
     this.modal.appendChild(content);
     document.body.appendChild(this.modal);
     
-    // Set up canvas after it's added to the DOM
-    this.setupCanvas();
-    
     // Handle clear button
     document.getElementById('clearSignature').addEventListener('click', this.clearCanvas.bind(this));
   },
   
   // Set up the signature canvas
   setupCanvas() {
-    this.canvas = document.getElementById('signatureCanvas');
+    const canvasElement = document.getElementById('signatureCanvas');
+    if (!canvasElement) {
+      console.error('Signature canvas element not found');
+      return;
+    }
+    
+    this.canvas = canvasElement;
     this.ctx = this.canvas.getContext('2d');
     
     // Set canvas size to match container size
     const container = this.canvas.parentElement;
+    if (!container) {
+      console.error('Canvas container not found');
+      return;
+    }
+    
     this.canvas.width = container.offsetWidth;
     this.canvas.height = container.offsetHeight;
+    
+    // Remove any existing event listeners to prevent duplicates
+    this.canvas.removeEventListener('mousedown', this.startDrawing);
+    this.canvas.removeEventListener('mousemove', this.draw);
+    this.canvas.removeEventListener('mouseup', this.stopDrawing);
+    this.canvas.removeEventListener('mouseout', this.stopDrawing);
+    this.canvas.removeEventListener('touchstart', this.handleTouchStart);
+    this.canvas.removeEventListener('touchmove', this.handleTouchMove);
+    this.canvas.removeEventListener('touchend', this.stopDrawing);
     
     // Set up drawing events
     this.canvas.addEventListener('mousedown', this.startDrawing.bind(this));
@@ -191,6 +225,8 @@ const Signature = {
     this.ctx.lineWidth = 2;
     this.ctx.lineCap = 'round';
     this.ctx.strokeStyle = 'var(--gray-800)';
+    
+    console.log('Canvas initialized successfully');
   },
   
   // Start drawing on the canvas
@@ -201,6 +237,8 @@ const Signature = {
     }
     
     this.isDrawing = true;
+    this.hasSigned = true;
+    
     this.ctx.beginPath();
     
     const { offsetX, offsetY } = this.getCoordinates(e);
@@ -214,18 +252,26 @@ const Signature = {
     const { offsetX, offsetY } = this.getCoordinates(e);
     this.ctx.lineTo(offsetX, offsetY);
     this.ctx.stroke();
+    this.ctx.beginPath();
+    this.ctx.moveTo(offsetX, offsetY);
   },
   
   // Stop drawing
   stopDrawing() {
     this.isDrawing = false;
+    this.ctx.beginPath();
   },
   
   // Handle touch start event
   handleTouchStart(e) {
     e.preventDefault();
     if (e.touches.length === 1) {
-      this.startDrawing(e.touches[0]);
+      const touch = e.touches[0];
+      const mouseEvent = new MouseEvent('mousedown', {
+        clientX: touch.clientX,
+        clientY: touch.clientY
+      });
+      this.startDrawing(mouseEvent);
     }
   },
   
@@ -233,17 +279,26 @@ const Signature = {
   handleTouchMove(e) {
     e.preventDefault();
     if (e.touches.length === 1) {
-      this.draw(e.touches[0]);
+      const touch = e.touches[0];
+      const mouseEvent = new MouseEvent('mousemove', {
+        clientX: touch.clientX,
+        clientY: touch.clientY
+      });
+      this.draw(mouseEvent);
     }
   },
   
   // Get coordinates from event
   getCoordinates(e) {
+    if (!this.canvas) {
+      return { offsetX: 0, offsetY: 0 };
+    }
+    
     const rect = this.canvas.getBoundingClientRect();
     
     // Handle mouse or touch event
     let clientX, clientY;
-    if (e.clientX) {
+    if (e.clientX !== undefined) {
       clientX = e.clientX;
       clientY = e.clientY;
     } else {
@@ -259,9 +314,10 @@ const Signature = {
   
   // Clear the canvas
   clearCanvas() {
-    if (!this.ctx) return;
+    if (!this.ctx || !this.canvas) return;
     
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    this.hasSigned = false;
     
     const instructions = document.getElementById('signatureInstructions');
     if (instructions) {
@@ -271,6 +327,8 @@ const Signature = {
   
   // Check if the canvas is empty
   isCanvasEmpty() {
+    if (!this.ctx || !this.canvas) return true;
+    
     const pixelData = this.ctx.getImageData(0, 0, this.canvas.width, this.canvas.height).data;
     
     // Check if all pixel values are 0 (transparent)
@@ -286,9 +344,22 @@ const Signature = {
   // Process the signature form
   processSignature() {
     // Check if signature exists
-    if (this.isCanvasEmpty()) {
+    if (!this.hasSigned || this.isCanvasEmpty()) {
       alert('Please sign the document before proceeding.');
       return;
+    }
+    
+    // Check if terms accepted
+    const termsAccepted = document.getElementById('termsAccepted');
+    const termsError = document.getElementById('termsError');
+    
+    if (!termsAccepted || !termsAccepted.checked) {
+      if (termsError) {
+        termsError.style.display = 'block';
+      }
+      return;
+    } else if (termsError) {
+      termsError.style.display = 'none';
     }
     
     // Get form data
@@ -354,13 +425,21 @@ const Signature = {
     
     // Add to document
     const quoteSection = document.getElementById('quoteSection');
-    quoteSection.querySelector('.card').prepend(confirmation);
+    if (quoteSection) {
+      const card = quoteSection.querySelector('.card');
+      if (card) {
+        card.prepend(confirmation);
+      }
+    }
     
     // Display signature
     this.displaySignature(signatureData);
     
     // Disable the accept button
-    document.getElementById('acceptQuoteBtn').disabled = true;
+    const acceptBtn = document.getElementById('acceptQuoteBtn');
+    if (acceptBtn) {
+      acceptBtn.disabled = true;
+    }
   },
   
   // Display the signature in the quote
@@ -393,6 +472,11 @@ const Signature = {
     
     // Add to document
     const quoteSection = document.getElementById('quoteSection');
-    quoteSection.querySelector('.btn-group').before(signatureDisplay);
+    if (quoteSection) {
+      const btnGroup = quoteSection.querySelector('.btn-group');
+      if (btnGroup) {
+        btnGroup.parentNode.insertBefore(signatureDisplay, btnGroup);
+      }
+    }
   }
 };
