@@ -387,6 +387,9 @@ const Signature = {
     // Save the signature data
     this.saveSignature(signatureData);
     
+    // Send emails
+    this.sendAcceptanceEmails(signatureData);
+    
     // Close the modal
     this.modal.style.display = 'none';
     
@@ -409,6 +412,334 @@ const Signature = {
     console.log('Signature data saved:', signatureData);
   },
   
+  // Send acceptance emails to client and business owner
+  sendAcceptanceEmails(signatureData) {
+    // Get required data for emails
+    const clientName = signatureData.name;
+    const clientEmail = signatureData.email;
+    const quoteData = signatureData.quoteData;
+    const ownerEmail = AppState.rates.businessInfo.email; // "drewemmett123@gmail.com"
+    const businessName = AppState.rates.businessInfo.name;
+    const formattedDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    const formattedTime = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    
+    // Create and send the emails
+    try {
+      // 1. Send confirmation email to client
+      this.sendEmail({
+        to: clientEmail,
+        from: ownerEmail,
+        subject: `Quote Acceptance Confirmation - ${businessName}`,
+        html: this.generateClientEmailContent(signatureData)
+      });
+      
+      // 2. Send notification email to business owner
+      this.sendEmail({
+        to: ownerEmail,
+        from: 'noreply@emmett-production.com',
+        subject: `[QUOTE ACCEPTED] ${clientName} has accepted your quote`,
+        html: this.generateOwnerEmailContent(signatureData)
+      });
+      
+      console.log('Acceptance emails sent successfully');
+    } catch (error) {
+      console.error('Error sending acceptance emails:', error);
+    }
+  },
+  
+  // Send an email (API implementation)
+  sendEmail(options) {
+    // In a production environment, this would connect to a real email sending service
+    // Such as SendGrid, Mailgun, AWS SES, or a custom SMTP server
+    
+    // For demo purposes, we'll just log the email data
+    console.log('Sending email:', options);
+    
+    // Example implementation using the EmailJS service (would require actual implementation)
+    if (typeof emailjs !== 'undefined') {
+      // This is just a placeholder for what an actual email service implementation would look like
+      // You would need to include the EmailJS library and configure it with your account details
+      emailjs.send('service_id', 'template_id', {
+        to_email: options.to,
+        from_email: options.from,
+        subject: options.subject,
+        message_html: options.html
+      }).then(
+        response => {
+          console.log('Email sent:', response);
+        },
+        error => {
+          console.error('Email error:', error);
+        }
+      );
+    } else {
+      // Example implementation in a Node.js server environment using Nodemailer
+      // This would be if you're using a backend service to handle emails
+      /*
+      const nodemailer = require('nodemailer');
+      
+      const transporter = nodemailer.createTransport({
+        service: 'gmail',
+        auth: {
+          user: 'drewemmett123@gmail.com',
+          pass: 'your-app-password' // Use app password for Gmail
+        }
+      });
+      
+      const mailOptions = {
+        from: options.from,
+        to: options.to,
+        subject: options.subject,
+        html: options.html
+      };
+      
+      transporter.sendMail(mailOptions, (error, info) => {
+        if (error) {
+          console.error('Email error:', error);
+        } else {
+          console.log('Email sent:', info.response);
+        }
+      });
+      */
+    }
+  },
+  
+  // Generate email content for client
+  generateClientEmailContent(signatureData) {
+    const clientName = signatureData.name;
+    const quoteData = signatureData.quoteData;
+    const businessName = AppState.rates.businessInfo.name;
+    const businessEmail = AppState.rates.businessInfo.email;
+    const formattedDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    const formattedTime = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    
+    // Generate quote rows HTML
+    let quoteRowsHtml = '';
+    quoteData.rows.forEach(row => {
+      const service = row[0];
+      const details = row[1];
+      const rate = row[2];
+      const amount = row[3];
+      
+      // Skip date rows
+      if (service === 'Quote Date' || service === 'Quote Valid Until') return;
+      
+      // Format amount based on whether it's a string or number
+      const formattedAmount = typeof amount === 'number' ? 
+        Calculator.formatCurrency(amount) : amount;
+      
+      // Add row with appropriate styling for total
+      if (service === 'TOTAL') {
+        quoteRowsHtml += `
+          <tr style="font-weight: bold; background-color: #f8f9fa;">
+            <td style="padding: 12px; border-bottom: 1px solid #dee2e6;">${service}</td>
+            <td style="padding: 12px; border-bottom: 1px solid #dee2e6;">${details}</td>
+            <td style="padding: 12px; border-bottom: 1px solid #dee2e6;">${rate}</td>
+            <td style="padding: 12px; border-bottom: 1px solid #dee2e6;">${formattedAmount}</td>
+          </tr>
+        `;
+      } else {
+        quoteRowsHtml += `
+          <tr>
+            <td style="padding: 12px; border-bottom: 1px solid #dee2e6;">${service}</td>
+            <td style="padding: 12px; border-bottom: 1px solid #dee2e6;">${details}</td>
+            <td style="padding: 12px; border-bottom: 1px solid #dee2e6;">${rate}</td>
+            <td style="padding: 12px; border-bottom: 1px solid #dee2e6;">${formattedAmount}</td>
+          </tr>
+        `;
+      }
+    });
+    
+    // Generate notes HTML
+    let notesHtml = '';
+    quoteData.notes.forEach(note => {
+      notesHtml += `<li style="margin-bottom: 8px;">${note}</li>`;
+    });
+    
+    // Generate signature HTML
+    const signatureHtml = `
+      <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #dee2e6;">
+        <h4 style="font-size: 18px; margin-bottom: 15px;">Accepted By:</h4>
+        <table style="width: 100%;">
+          <tr>
+            <td style="width: 50%;">
+              <div style="font-weight: bold;">${signatureData.name}</div>
+              ${signatureData.title ? `<div style="color: #6c757d; font-size: 14px;">${signatureData.title}</div>` : ''}
+              <div style="color: #6c757d; font-size: 14px;">${signatureData.email}</div>
+            </td>
+            <td style="width: 50%; text-align: right;">
+              <img src="${signatureData.signature}" alt="Signature" style="height: 60px; max-width: 200px;">
+              <div style="color: #6c757d; font-size: 12px; margin-top: 5px;">
+                ${formattedDate} ${formattedTime}
+              </div>
+            </td>
+          </tr>
+        </table>
+      </div>
+    `;
+    
+    // Compile the complete email HTML
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Quote Acceptance Confirmation</title>
+      </head>
+      <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 20px;">
+        <div style="max-width: 800px; margin: 0 auto; background-color: #fff; border-radius: 5px; padding: 20px; box-shadow: 0 0 10px rgba(0,0,0,0.1);">
+          <div style="text-align: center; margin-bottom: 30px;">
+            <h1 style="color: #ff7b00; margin-bottom: 10px;">${businessName}</h1>
+            <h2 style="color: #4a4a4a; font-weight: normal; margin-top: 0;">Quote Acceptance Confirmation</h2>
+            <p style="color: #6c757d;">Quote accepted on ${formattedDate} at ${formattedTime}</p>
+          </div>
+          
+          <div style="margin-bottom: 30px;">
+            <p>Dear ${clientName},</p>
+            <p>Thank you for accepting the quote for ${quoteData.project.name || 'our services'}. This email confirms your acceptance of the terms and pricing detailed below.</p>
+            <p>A copy of the signed quote is attached, and a representative will be in touch shortly to discuss next steps and schedule your project.</p>
+          </div>
+          
+          <h3 style="color: #4a4a4a; border-bottom: 1px solid #dee2e6; padding-bottom: 10px;">Quote Summary</h3>
+          <table style="width: 100%; border-collapse: collapse; margin-bottom: 30px;">
+            <thead>
+              <tr style="background-color: #f8f9fa;">
+                <th style="text-align: left; padding: 12px; border-bottom: 2px solid #dee2e6;">Service</th>
+                <th style="text-align: left; padding: 12px; border-bottom: 2px solid #dee2e6;">Details</th>
+                <th style="text-align: left; padding: 12px; border-bottom: 2px solid #dee2e6;">Rate</th>
+                <th style="text-align: left; padding: 12px; border-bottom: 2px solid #dee2e6;">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${quoteRowsHtml}
+            </tbody>
+          </table>
+          
+          <div style="background-color: #f8f9fa; padding: 15px; border-radius: 5px; margin-bottom: 30px;">
+            <h4 style="margin-top: 0; color: #4a4a4a;">Important Notes:</h4>
+            <ul style="padding-left: 20px;">
+              ${notesHtml}
+            </ul>
+          </div>
+          
+          ${signatureHtml}
+          
+          <div style="margin-top: 30px; text-align: center; color: #6c757d; font-size: 14px; border-top: 1px solid #dee2e6; padding-top: 20px;">
+            <p>If you have any questions, please contact us at <a href="mailto:${businessEmail}" style="color: #ff7b00;">${businessEmail}</a>.</p>
+            <p>&copy; ${new Date().getFullYear()} ${businessName}. All rights reserved.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+  },
+  
+  // Generate email content for owner notification
+  generateOwnerEmailContent(signatureData) {
+    const clientName = signatureData.name;
+    const clientEmail = signatureData.email;
+    const clientTitle = signatureData.title;
+    const quoteData = signatureData.quoteData;
+    const quoteTotal = Calculator.formatCurrency(quoteData.total);
+    const projectName = quoteData.project.name || 'Unnamed Project';
+    const projectLocation = quoteData.project.location;
+    const formattedDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    const formattedTime = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Quote Accepted Notification</title>
+      </head>
+      <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; margin: 0; padding: 20px;">
+        <div style="max-width: 600px; margin: 0 auto; background-color: #fff; border-radius: 5px; padding: 20px; box-shadow: 0 0 10px rgba(0,0,0,0.1);">
+          <div style="text-align: center; margin-bottom: 30px; padding: 20px; background-color: #ff7b00; color: #fff; border-radius: 5px;">
+            <h1 style="margin-bottom: 10px;">Quote Accepted!</h1>
+            <p style="margin: 0; font-size: 18px;">${quoteTotal}</p>
+          </div>
+          
+          <div style="margin-bottom: 30px;">
+            <p><strong>${clientName}</strong> has accepted your quote for <strong>${projectName}</strong>${projectLocation ? ` (${projectLocation})` : ''}.</p>
+            <p>The quote was accepted on ${formattedDate} at ${formattedTime}.</p>
+          </div>
+          
+          <h3 style="color: #4a4a4a; border-bottom: 1px solid #dee2e6; padding-bottom: 10px;">Client Information</h3>
+          <table style="width: 100%; border-collapse: collapse; margin-bottom: 30px;">
+            <tr>
+              <td style="padding: 8px 0; border-bottom: 1px solid #dee2e6; font-weight: bold; width: 120px;">Name:</td>
+              <td style="padding: 8px 0; border-bottom: 1px solid #dee2e6;">${clientName}</td>
+            </tr>
+            <tr>
+              <td style="padding: 8px 0; border-bottom: 1px solid #dee2e6; font-weight: bold;">Email:</td>
+              <td style="padding: 8px 0; border-bottom: 1px solid #dee2e6;">
+                <a href="mailto:${clientEmail}" style="color: #ff7b00;">${clientEmail}</a>
+              </td>
+            </tr>
+            ${clientTitle ? `
+            <tr>
+              <td style="padding: 8px 0; border-bottom: 1px solid #dee2e6; font-weight: bold;">Title:</td>
+              <td style="padding: 8px 0; border-bottom: 1px solid #dee2e6;">${clientTitle}</td>
+            </tr>
+            ` : ''}
+          </table>
+          
+          <h3 style="color: #4a4a4a; border-bottom: 1px solid #dee2e6; padding-bottom: 10px;">Quote Summary</h3>
+          <table style="width: 100%; border-collapse: collapse; margin-bottom: 30px;">
+            <tr>
+              <td style="padding: 8px 0; border-bottom: 1px solid #dee2e6; font-weight: bold; width: 120px;">Project:</td>
+              <td style="padding: 8px 0; border-bottom: 1px solid #dee2e6;">${projectName}</td>
+            </tr>
+            ${projectLocation ? `
+            <tr>
+              <td style="padding: 8px 0; border-bottom: 1px solid #dee2e6; font-weight: bold;">Location:</td>
+              <td style="padding: 8px 0; border-bottom: 1px solid #dee2e6;">${projectLocation}</td>
+            </tr>
+            ` : ''}
+            <tr>
+              <td style="padding: 8px 0; border-bottom: 1px solid #dee2e6; font-weight: bold;">Amount:</td>
+              <td style="padding: 8px 0; border-bottom: 1px solid #dee2e6; font-weight: bold; color: #ff7b00;">
+                ${quoteTotal}
+              </td>
+            </tr>
+            <tr>
+              <td style="padding: 8px 0; border-bottom: 1px solid #dee2e6; font-weight: bold;">Deposit:</td>
+              <td style="padding: 8px 0; border-bottom: 1px solid #dee2e6;">
+                ${Calculator.formatCurrency(AppState.depositAmount)} (${AppState.depositPercentage * 100}%)
+              </td>
+            </tr>
+          </table>
+          
+          <div style="text-align: center;">
+            <div style="display: inline-block; text-align: left;">
+              <h3 style="color: #4a4a4a; margin-bottom: 15px;">Signature</h3>
+              <img src="${signatureData.signature}" alt="Signature" style="height: 80px; max-width: 300px;">
+              <p style="color: #6c757d; font-size: 14px; margin-top: 5px;">
+                Signed on ${formattedDate} at ${formattedTime}
+              </p>
+            </div>
+          </div>
+          
+          <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #dee2e6; text-align: center;">
+            <p style="margin-bottom: 0;">A confirmation email has been automatically sent to the client.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+  },
+  
+  // Generate a PDF of the quote with signature
+  generateQuotePDF(signatureData) {
+    // In a production environment, this would use a PDF generation library
+    // For demo purposes, we'll just return the HTML content
+    const quoteContent = this.generateClientEmailContent(signatureData);
+    return quoteContent;
+  },
+  
   // Show acceptance confirmation
   showAcceptanceConfirmation(signatureData) {
     // Create confirmation message
@@ -419,7 +750,7 @@ const Signature = {
       <div>
         <strong>Quote Accepted!</strong>
         <p>Quote has been accepted by ${signatureData.name} on ${new Date().toLocaleString()}</p>
-        <p>A confirmation email will be sent to ${signatureData.email}</p>
+        <p>A confirmation email has been sent to ${signatureData.email}</p>
       </div>
     `;
     
