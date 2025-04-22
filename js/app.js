@@ -1,6 +1,7 @@
 /**
- * Main Application Controller
+ * Modified Main Application Controller
  * Emmett's Production Rate Calculator
+ * Added PIN Authentication
  */
 
 // Global app state
@@ -30,6 +31,9 @@ const AppState = {
       Signature.init();
       Payment.init(this.rates.paymentMethods);
       History.init();
+      
+      // Initialize PIN Authentication
+      PinAuth.init();
       
       console.log('App initialized successfully');
     } catch (error) {
