@@ -481,7 +481,7 @@ const Signature = {
     if (this.emailJSInitialized) {
       const clientEmailPromise = emailjs.send(
         'default_service', // Replace with your EmailJS service ID
-        'client_quote_acceptance', // Replace with your EmailJS template ID
+        'template_bfk7r4q', // Replace with your EmailJS template ID
         {
           to_name: clientName,
           to_email: clientEmail,
@@ -510,7 +510,7 @@ const Signature = {
       // 2. Send owner notification email
       const ownerEmailPromise = emailjs.send(
         'default_service', // Replace with your EmailJS service ID
-        'owner_quote_notification', // Replace with your EmailJS template ID
+        'template_f7mvasu', // Replace with your EmailJS template ID
         {
           owner_email: ownerEmail,
           client_name: clientName,
