@@ -26,7 +26,7 @@ const Signature = {
       script.async = true;
       script.onload = () => {
         // Initialize EmailJS with your account ID
-        emailjs.init("YOUR_EMAILJS_PUBLIC_KEY"); // Replace with your public key
+        emailjs.init("4xjHyQ-ldAUyJqEN7"); // Replace with your public key
         this.emailJSInitialized = true;
         console.log('EmailJS initialized');
       };
