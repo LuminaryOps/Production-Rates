@@ -13,6 +13,11 @@ const AppState = {
   depositAmount: 0,
   depositPercentage: 0,
   isPaid: false,
+  selectedDates: null,
+  availability: {
+    bookedDates: {},
+    blockedDates: {}
+  },
   
   // Initialize the application
   async init() {
@@ -34,6 +39,9 @@ const AppState = {
       // Initialize PIN Authentication
       PinAuth.init();
       
+      // Initialize Calendar
+      Calendar.init();
+      
       console.log('App initialized successfully');
     } catch (error) {
       console.error('App initialization failed:', error);
@@ -50,6 +58,7 @@ const AppState = {
     this.depositAmount = 0;
     this.depositPercentage = 0;
     this.isPaid = false;
+    this.selectedDates = null;
   }
 };
 
