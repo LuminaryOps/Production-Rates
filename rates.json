@@ -1,0 +1,192 @@
+{
+  "services": {
+    "single": {
+      "name": "Single Role Technician",
+      "description": "LED, Media, Projection, Switching, etc.",
+      "rates": {
+        "full": 500,
+        "half": 290,
+        "overtime": 100
+      }
+    },
+    "multi": {
+      "name": "Multi-Role Technician",
+      "description": "Any 2 technical roles",
+      "rates": {
+        "full": 654,
+        "half": 379,
+        "overtime": 125
+      }
+    },
+    "director": {
+      "name": "Technical Director",
+      "description": "Full show oversight + operation",
+      "rates": {
+        "full": 955,
+        "half": 550,
+        "overtime": 140
+      }
+    }
+  },
+  "specialty": {
+    "prep": {
+      "name": "Pre-Production Day",
+      "description": "Content prep, system setup, testing",
+      "rate": 500,
+      "unit": "day"
+    },
+    "content": {
+      "name": "Content Development",
+      "description": "Media creation, formatting, optimization",
+      "rate": 90,
+      "unit": "hour"
+    },
+    "shader": {
+      "name": "Custom Shader Development",
+      "description": "Real-time effects for media servers",
+      "rate": 125,
+      "unit": "hour"
+    },
+    "remote": {
+      "name": "Remote Tech Consultation",
+      "description": "System design, troubleshooting assistance",
+      "rate": 100,
+      "unit": "hour"
+    },
+    "resolume": {
+      "name": "Resolume Laptop Rental",
+      "description": "Nvidia RTX 4070, Resolume Arena preinstalled",
+      "rate": 75,
+      "unit": "day"
+    },
+    "surface": {
+      "name": "Surface Pro Rental",
+      "description": "Portable control surface for presentations",
+      "rate": 30,
+      "unit": "day"
+    }
+  },
+  "packages": {
+    "single": {
+      "2day": {
+        "rate": 950,
+        "discount": 0.05
+      },
+      "3day": {
+        "rate": 1350,
+        "discount": 0.10
+      },
+      "5day": {
+        "rate": 2125,
+        "discount": 0.15
+      }
+    },
+    "multi": {
+      "2day": {
+        "rate": 1243,
+        "discount": 0.05
+      },
+      "3day": {
+        "rate": 1767,
+        "discount": 0.10
+      },
+      "5day": {
+        "rate": 2780,
+        "discount": 0.15
+      }
+    },
+    "director": {
+      "2day": {
+        "rate": 1815,
+        "discount": 0.05
+      },
+      "3day": {
+        "rate": 2579,
+        "discount": 0.10
+      },
+      "5day": {
+        "rate": 4059,
+        "discount": 0.15
+      }
+    }
+  },
+  "discounts": {
+    "new": {
+      "name": "First-Time Client",
+      "rate": 0.10,
+      "description": "One-time discount for first booking"
+    },
+    "partner5": {
+      "name": "Partner (5-7 days/month)",
+      "rate": 0.10,
+      "description": "Regular client booking 5-7 days per month"
+    },
+    "partner8": {
+      "name": "Partner (8+ days/month)",
+      "rate": 0.15,
+      "description": "Regular client booking 8+ days per month"
+    }
+  },
+  "depositRates": {
+    "new": 0.50,
+    "regular": 0.25,
+    "partner5": 0.25,
+    "partner8": 0.25
+  },
+  "paymentMethods": [
+    {
+      "id": "stripe",
+      "name": "Credit Card",
+      "icon": "fa-credit-card",
+      "fee": 0.029,
+      "flatFee": 0.30,
+      "enabled": true
+    },
+    {
+      "id": "paypal",
+      "name": "PayPal",
+      "icon": "fa-paypal",
+      "fee": 0.029,
+      "flatFee": 0.30,
+      "enabled": true
+    },
+    {
+      "id": "zelle",
+      "name": "Zelle",
+      "icon": "fa-university",
+      "fee": 0,
+      "flatFee": 0,
+      "enabled": true
+    },
+    {
+      "id": "venmo",
+      "name": "Venmo",
+      "icon": "fa-v",
+      "fee": 0,
+      "flatFee": 0,
+      "enabled": true
+    },
+    {
+      "id": "check",
+      "name": "Check",
+      "icon": "fa-money-check",
+      "fee": 0,
+      "flatFee": 0,
+      "enabled": true
+    }
+  ],
+  "terms": {
+    "quoteValidity": 14,
+    "cancellationPolicy": {
+      "within7Days": 0.50,
+      "within14Days": 0.25
+    }
+  },
+  "businessInfo": {
+    "name": "Emmett Technical Production",
+    "email": "drewemmett123@gmail.com",
+    "phone": "",
+    "website": "",
+    "taxId": ""
+  }
+}

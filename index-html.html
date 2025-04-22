@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Emmett's Rate Calculator with Deposit Handling</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header with Atom Animation -->
+    <div class="header">
+      <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 1rem;">
+        <h1>Emmett's Production Rate Calculator</h1>
+        <div style="width: 60px; height: 60px; margin-left: 15px;">
+          <!-- Inline SVG for the atom animation -->
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
+            <!-- Styling -->
+            <defs>
+              <radialGradient id="nucleusGradient" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
+                <stop offset="0%" stop-color="#ff9f43" />
+                <stop offset="100%" stop-color="#ff7b00" />
+              </radialGradient>
+              <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+                <feGaussianBlur stdDeviation="2" result="blur" />
+                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+              </filter>
+            </defs>
+
+            <!-- Horizontal orbital ellipse -->
+            <ellipse cx="100" cy="100" rx="70" ry="40" 
+                    fill="none" stroke="#ff7b00" stroke-width="1" 
+                    stroke-opacity="0.2" />
+            
+            <!-- Vertical orbital ellipse -->
+            <ellipse cx="100" cy="100" rx="40" ry="70" 
+                    fill="none" stroke="#ff7b00" stroke-width="1" 
+                    stroke-opacity="0.2" />
+
+            <!-- Electrons on horizontal orbit -->
+            <circle cx="170" cy="100" r="4" fill="#ff7b00" filter="url(#glow)">
+              <animateTransform attributeName="transform"
+                              type="rotate"
+                              from="0 100 100"
+                              to="360 100 100"
+                              dur="3s"
+                              repeatCount="indefinite" />
+            </circle>
+            
+            <circle cx="170" cy="100" r="4" fill="#ff7b00" filter="url(#glow)">
+              <animateTransform attributeName="transform"
+                              type="rotate"
+                              from="180 100 100"
+                              to="540 100 100"
+                              dur="3s"
+                              repeatCount="indefinite" />
+            </circle>
+
+            <!-- Electrons on vertical orbit -->
+            <circle cx="100" cy="170" r="4" fill="#ff9f43" filter="url(#glow)">
+              <animateTransform attributeName="transform"
+                              type="rotate"
+                              from="90 100 100"
+                              to="450 100 100"
+                              dur="5s"
+                              repeatCount="indefinite" />
+            </circle>
+            
+            <circle cx="100" cy="170" r="4" fill="#ff9f43" filter="url(#glow)">
+              <animateTransform attributeName="transform"
+                              type="rotate"
+                              from="270 100 100"
+                              to="630 100 100"
+                              dur="5s"
+                              repeatCount="indefinite" />
+            </circle>
+
+            <!-- Nucleus -->
+            <circle cx="100" cy="100" r="10" fill="url(#nucleusGradient)" filter="url(#glow)">
+              <animate attributeName="r" values="10;12;10" dur="2s" repeatCount="indefinite" />
+            </circle>
+          </svg>
+        </div>
+      </div>
+      <p class="subtitle">(2025 Rates)</p>
+    </div>
+    
+    <!-- Tabs -->
+    <div class="tabs">
+      <div class="tab active" data-tab="calculator">
+        <i class="fas fa-calculator"></i> Calculator
+      </div>
+      <div class="tab" data-tab="ratecard">
+        <i class="fas fa-file-invoice-dollar"></i> Rate Card
+      </div>
+      <!-- History tab will be added dynamically -->
+    </div>
+    
+    <!-- Calculator Tab -->
+    <div id="calculator" class="tab-content active">
+      <!-- Form Section -->
+      <div class="form-section">
+        <h2><i class="fas fa-briefcase"></i> Service Details</h2>
+        <div class="row">
+          <div class="col">
+            <div class="form-group">
+              <label for="serviceType">Service Type</label>
+              <select id="serviceType">
+                <option value="single">Single Role Technician</option>
+                <option value="multi">Multi-Role Technician</option>
+                <option value="director">Technical Director</option>
+              </select>
+            </div>
+          </div>
+          <div class="col">
+            <div class="form-group">
+              <label for="durationType">Duration</label>
+              <select id="durationType">
+                <option value="full">Full Day (10 hrs)</option>
+                <option value="half">Half Day (5 hrs)</option>
+                <option value="2day">2-Day Package</option>
+                <option value="3day">3-Day Package</option>
+                <option value="5day">5-Day Package</option>
+                <option value="custom">Custom Days</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        
+        <div class="row" id="customDaysRow" style="display: none;">
+          <div class="col">
+            <div class="form-group">
+              <label for="customDays">Number of Days</label>
+              <input type="number" id="customDays" min="1" value="1">
+            </div>
+          </div>
+        </div>
+        
+        <div class="row">
+          <div class="col">
+            <div class="form-group">
+              <label for="additionalHours">Overtime Hours</label>
+              <input type="number" id="additionalHours" min="0" value="0">
+            </div>
+          </div>
+        </div>
+        
+        <h2><i class="fas fa-code-branch"></i> Specialty Services</h2>
+        
+        <!-- Multiple Specialty Services Section -->
+        <div class="specialty-list" id="specialtyList">
+          <!-- List items will be added here dynamically -->
+          <div class="specialty-list-empty" id="emptySpecialtyMessage">
+            No specialty services added yet.
+          </div>
+        </div>
+        
+        <div class="add-specialty-form">
+          <div class="service-input-group">
+            <label for="specialtyServiceSelect">Add Specialty Service</label>
+            <select id="specialtyServiceSelect">
+              <option value="none">Select Service...</option>
+              <option value="prep">Pre-Production Day</option>
+              <option value="content">Content Development (hourly)</option>
+              <option value="shader">Shader Development (hourly)</option>
+              <option value="remote">Remote Consultation (hourly)</option>
+              <option value="resolume">Resolume Laptop Rental - RTX 4070 (daily)</option>
+              <option value="surface">Surface Pro Rental (daily)</option>
+            </select>
+          </div>
+          <div class="amount-input-group">
+            <label for="specialtyAmount">Hours/Days</label>
+            <input type="number" id="specialtyAmount" min="1" value="1">
+          </div>
+          <button type="button" class="btn btn-outline btn-sm" id="addSpecialtyBtn">
+            <i class="fas fa-plus"></i> Add Service
+          </button>
+        </div>
+        
+        <h2><i class="fas fa-user-friends"></i> Client & Discounts</h2>
+        <div class="row">
+          <div class="col">
+            <div class="form-group">
+              <label for="clientType">
+                Client Type
+                <div class="tooltip">
+                  <i class="fas fa-info-circle"></i>
+                  <span class="tooltip-text">Partner status is evaluated and reset monthly. Booking thresholds (5+ or 8+ days) must be met each month for discounts to apply.</span>
+                </div>
+              </label>
+              <select id="clientType">
+                <option value="regular">Regular</option>
+                <option value="new">First-Time (10% off)</option>
+                <option value="partner5">Partner 5-7 days/mo (10%)</option>
+                <option value="partner8">Partner 8+ days/mo (15%)</option>
+              </select>
+            </div>
+          </div>
+          <div class="col">
+            <div class="form-group">
+              <label for="clientName">Client Name (optional)</label>
+              <input type="text" id="clientName" placeholder="Enter client name">
+            </div>
+          </div>
+        </div>
+        
+        <div class="note" style="margin-top: 1rem;">
+          <div class="note-header">
+            <i class="fas fa-sync-alt"></i> Partner Status Policy
+          </div>
+          <p>Partner status is evaluated at the beginning of each month. Monthly booking thresholds (5+ or 8+ days) must be met in the current month for applicable discounts to be applied.</p>
+        </div>
+        
+        <div class="row">
+          <div class="col">
+            <div class="form-group">
+              <label for="projectName">Project Name (optional)</label>
+              <input type="text" id="projectName" placeholder="Enter project name">
+            </div>
+          </div>
+          <div class="col">
+            <div class="form-group">
+              <label for="projectLocation">Location (optional)</label>
+              <input type="text" id="projectLocation" placeholder="Enter project location">
+            </div>
+          </div>
+        </div>
+        
+        <div class="switch-container">
+          <label class="switch">
+            <input type="checkbox" id="includeTravel">
+            <span class="slider"></span>
+          </label>
+          <span class="switch-label">Include travel days (billed at full day rate)</span>
+          <div class="tooltip">
+            <i class="fas fa-info-circle"></i>
+            <span class="tooltip-text">Travel days are billed at the full day rate regardless of actual hours traveled, as these days are exclusively dedicated to client projects.</span>
+          </div>
+        </div>
+        
+        <div id="travelDaysRow" style="display: none; margin-top: 1rem;">
+          <div class="row">
+            <div class="col">
+              <div class="form-group">
+                <label for="travelDays">Number of Travel Days</label>
+                <input type="number" id="travelDays" min="0" value="0">
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="btn-group">
+          <button id="calculateBtn" class="btn btn-primary">
+            <i class="fas fa-calculator"></i> Calculate Quote
+          </button>
+          <button id="resetBtn" class="btn btn-outline">
+            <i class="fas fa-redo"></i> Reset Form
+          </button>
+        </div>
+      </div>
+      
+      <!-- Loading Indicator -->
+      <div class="loading" id="loadingIndicator">
+        <div class="loading-spinner"></div>
+        <span>Calculating...</span>
+      </div>
+      
+      <!-- Quote Section -->
+      <div id="quoteSection" class="result-section">
+        <div class="card">
+          <div class="card-header">
+            <h3>
+              <i class="fas fa-file-invoice"></i> 
+              Quote Summary 
+              <span class="badge badge-primary" id="quoteDate"></span>
+            </h3>
+            <div id="quoteInfo">
+              <span id="quoteClientDisplay"></span>
+              <span id="quoteProjectDisplay"></span>
+            </div>
+          </div>
+          
+          <table>
+            <thead>
+              <tr>
+                <th>Service</th>
+                <th>Details</th>
+                <th>Rate</th>
+                <th>Amount</th>
+              </tr>
+            </thead>
+            <tbody id="quoteBody"></tbody>
+          </table>
+          
+          <div class="note">
+            <div class="note-header">
+              <i class="fas fa-info-circle"></i> Important Notes
+            </div>
+            <div id="quoteNotes"></div>
+          </div>
+          
+          <div class="btn-group">
+            <button id="generateInvoice" class="btn btn-primary">
+              <i class="fas fa-file-invoice-dollar"></i> Convert to Invoice
+            </button>
+            <button id="printQuote" class="btn btn-outline">
+              <i class="fas fa-print"></i> Print Quote
+            </button>
+            <button id="saveQuotePdf" class="btn btn-outline">
+              <i class="fas fa-file-pdf"></i> Save as PDF
+            </button>
+          </div>
+        </div>
+      </div>
+      
+      <!-- Invoice Section -->
+      <div id="invoiceSection" class="result-section">
+        <div class="card">
+          <div class="invoice-header">
+            <div class="invoice-header-left">
+              <div class="invoice-title">INVOICE</div>
+              <p id="invoiceDateTime"></p>
+            </div>
+            <div class="invoice-header-right">
+              <span class="badge badge-primary" id="invoiceNumber"></span>
+            </div>
+          </div>
+          
+          <div class="invoice-meta">
+            <div class="invoice-meta-item">
+              <span class="invoice-meta-label">Client</span>
+              <span class="invoice-meta-value" id="invoiceClient"></span>
+            </div>
+            <div class="invoice-meta-item">
+              <span class="invoice-meta-label">Project</span>
+              <span class="invoice-meta-value" id="invoiceProject"></span>
+            </div>
+            <div class="invoice-meta-item">
+              <span class="invoice-meta-label">Date</span>
+              <span class="invoice-meta-value" id="invoiceDate"></span>
+            </div>
+            <div class="invoice-meta-item">
+              <span class="invoice-meta-label">Terms</span>
+              <span class="invoice-meta-value" id="invoiceTerms">Due upon receipt</span>
+            </div>
+          </div>
+          
+          <table>
+            <thead>
+              <tr>
+                <th>Service</th>
+                <th>Details</th>
+                <th>Rate</th>
+                <th>Amount</th>
+              </tr>
+            </thead>
+            <tbody id="invoiceBody"></tbody>
+          </table>
+          
+          <!-- Deposit Handling Section -->
+          <div class="invoice-summary">
+            <div class="invoice-summary-row">
+              <span class="invoice-summary-label">Subtotal:</span>
+              <span class="invoice-summary-value" id="invoiceSubtotal"></span>
+            </div>
+            <div class="invoice-summary-row" id="depositRow">
+              <span class="invoice-summary-label">Deposit Paid:</span>
+              <span class="invoice-summary-value" id="invoiceDeposit"></span>
+            </div>
+            <div class="invoice-summary-row invoice-total-row">
+              <span class="invoice-summary-label">Total Due:</span>
+              <span class="invoice-summary-value" id="invoiceTotal"></span>
+            </div>
+          </div>
+          
+          <div class="invoice-footer">
+            <p>Thank you for your business!</p>
+            <p>For questions about this invoice, please contact: drewemmett123@gmail.com</p>
+          </div>
+          
+          <div class="btn-group">
+            <button id="printInvoice" class="btn btn-primary">
+              <i class="fas fa-print"></i> Print Invoice
+            </button>
+            <button id="saveInvoicePdf" class="btn btn-outline">
+              <i class="fas fa-file-pdf"></i> Save as PDF
+            </button>
+            <button id="backToQuote" class="btn btn-outline">
+              <i class="fas fa-arrow-left"></i> Back to Quote
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- Rate Card Tab -->
+    <div id="ratecard" class="tab-content">
+      <div class="card">
+        <h2><i class="fas fa-dollar-sign"></i> Standard Day Rates</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Service Type</th>
+              <th>Full Day (10 hrs)</th>
+              <th>Half Day (5 hrs)</th>
+              <th>Overtime (per hr)</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Single Role Technician<br><small>LED, Media, Projection, Switching, etc.</small></td>
+              <td>$500</td>
+              <td>$290</td>
+              <td>$100</td>
+            </tr>
+            <tr>
+              <td>Multi-Role Technician<br><small>Any 2 technical roles</small></td>
+              <td>$654</td>
+              <td>$379</td>
+              <td>$125</td>
+            </tr>
+            <tr>
+              <td>Technical Director<br><small>Full show oversight + operation</small></td>
+              <td>$955</td>
+              <td>$550</td>
+              <td>$140</td>
+            </tr>
+          </tbody>
+        </table>
+        
+        <div class="note">
+          <div class="note-header">
+            <i class="fas fa-star"></i> Production Company Partners
+          </div>
+          <p>Companies booking 5+ days per month receive 10% off standard rates.<br>Regular clients (8+ days per month) receive 15% off.<br><strong>Note:</strong> Partner status is evaluated monthly and resets at the beginning of each month. Discounts apply only when monthly booking thresholds are met.</p>
+        </div>
+        
+        <h2><i class="fas fa-cogs"></i> Specialty Services</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Service</th>
+              <th>Rate</th>
+              <th>Details</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>Pre-Production / Prep Day</td>
+              <td>$500</td>
+              <td>Content prep, system setup, testing</td>
+            </tr>
+            <tr>
+              <td>Content Development</td>
+              <td>$90/hr</td>
+              <td>Media creation, formatting, optimization</td>
+            </tr>
+            <tr>
+              <td>Custom Shader Development</td>
+              <td>$125/hr</td>
+              <td>Real-time effects for media servers</td>
+            </tr>
+            <tr>
+              <td>Remote Tech Consultation</td>
+              <td>$100/hr</td>
+              <td>System design, troubleshooting assistance</td>
+            </tr>
+            <tr>
+              <td>Resolume Laptop Rental</td>
+              <td>$75/day</td>
+              <td>Nvidia RTX 4070, Resolume Arena preinstalled</td>
+            </tr>
+            <tr>
+              <td>Surface Pro Rental</td>
+              <td>$30/day</td>
+              <td>Portable control surface for presentations</td>
+            </tr>
+          </tbody>
+        </table>
+        
+        <h2><i class="fas fa-calendar-week"></i> Multi-Day Show Packages</h2>
+        <div class="note">
+          <div class="note-header">
+            <i class="fas fa-info-circle"></i> Package Details
+          </div>
+          <p>All packages include on-site labor, show prep, and content workflow management.</p>
+        </div>
+        <table>
+          <thead>
+            <tr>
+              <th>Duration</th>
+              <th>Single Role</th>
+              <th>Multi-Role</th>
+              <th>Technical Director</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>2 Days</td>
+              <td>$950 <small>(5% off)</small></td>
+              <td>$1,243 <small>(5% off)</small></td>
+              <td>$1,815 <small>(5% off)</small></td>
+            </tr>
+            <tr>
+              <td>3 Days</td>
+              <td>$1,350 <small>(10% off)</small></td>
+              <td>$1,767 <small>(10% off)</small></td>
+              <td>$2,579 <small>(10% off)</small></td>
+            </tr>
+            <tr>
+              <td>5 Days</td>
+              <td>$2,125 <small>(15% off)</small></td>
+              <td>$2,780 <small>(15% off)</small></td>
+              <td>$4,059 <small>(15% off)</small></td>
+            </tr>
+          </tbody>
+        </table>
+        
+        <h2><i class="fas fa-file-contract"></i> Terms & Policies</h2>
+        <ul style="list-style: none; padding-left: 0;">
+          <li><i class="fas fa-check" style="color: var(--primary); margin-right: 0.5rem;"></i> First-time client discount of 10% available for initial bookings.</li>
+          <li><i class="fas fa-check" style="color: var(--primary); margin-right: 0.5rem;"></i> <strong>Partner status</strong> is evaluated monthly and resets at the beginning of each month. Monthly booking thresholds must be met for discounts to apply.</li>
+          <li><i class="fas fa-check" style="color: var(--primary); margin-right: 0.5rem;"></i> Travel and per diem billable for events requiring overnight stays.</li>
+          <li><i class="fas fa-check" style="color: var(--primary); margin-right: 0.5rem;"></i> <strong>Travel days are billed at the full day rate</strong> regardless of actual hours traveled.</li>
+          <li><i class="fas fa-check" style="color: var(--primary); margin-right: 0.5rem;"></i> Cancellation: 50% fee if within 7 days, 25% fee if within 14 days.</li>
+          <li><i class="fas fa-check" style="color: var(--primary); margin-right: 0.5rem;"></i> All rates are for labor only. Equipment available through partner vendors.</li>
+          <li><i class="fas fa-check" style="color: var(--primary); margin-right: 0.5rem;"></i> Guaranteed 10-hour workday. Hours beyond 10 billed at overtime rate.</li>
+          <li><i class="fas fa-check" style="color: var(--primary); margin-right: 0.5rem;"></i> <strong>Deposits: 50% due upon booking for new clients, 25% for established clients.</strong></li>
+        </ul>
+      </div>
+    </div>
+    
+    <!-- History Tab will be added dynamically by JavaScript -->
+  </div>
+  
+  <!-- Dark Mode Toggle -->
+  <div class="dark-mode-toggle" id="darkModeToggle">
+    <i class="fas fa-moon"></i>
+  </div>
+  
+  <!-- JavaScript Modules -->
+  <script src="js/calculator.js"></script>
+  <script src="js/ui.js"></script>
+  <script src="js/signature.js"></script>
+  <script src="js/payment.js"></script>
+  <script src="js/history.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
