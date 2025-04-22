@@ -476,6 +476,205 @@ tr:hover td {
   margin-right: 0.5rem;
 }
 
+/* Calendar Styles */
+.calendar-controls {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 1.5rem;
+}
+
+.month-nav {
+  display: flex;
+  align-items: center;
+}
+
+.month-nav h3 {
+  margin: 0 1rem;
+  font-size: 1.25rem;
+}
+
+.calendar-container {
+  margin-bottom: 1.5rem;
+}
+
+.calendar-header, .calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 4px;
+}
+
+.calendar-header {
+  margin-bottom: 8px;
+  font-weight: 500;
+  color: var(--gray-600);
+  text-align: center;
+}
+
+.calendar-day {
+  height: 80px;
+  background-color: var(--gray-100);
+  border-radius: 8px;
+  padding: 0.5rem;
+  position: relative;
+  transition: all 0.2s;
+}
+
+.calendar-day:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+}
+
+.day-number {
+  font-weight: 500;
+  margin-bottom: 0.25rem;
+}
+
+.day-content {
+  font-size: 0.75rem;
+  overflow: hidden;
+}
+
+.calendar-day.inactive {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.calendar-day.available {
+  background-color: var(--gray-100);
+}
+
+.calendar-day.booked {
+  background-color: rgba(255, 123, 0, 0.15);
+  border: 1px solid rgba(255, 123, 0, 0.3);
+}
+
+.calendar-day.blocked {
+  background-color: rgba(255, 59, 48, 0.15);
+  border: 1px solid rgba(255, 59, 48, 0.3);
+}
+
+.calendar-day .event-indicator {
+  padding: 2px 4px;
+  border-radius: 4px;
+  margin-bottom: 2px;
+  background-color: rgba(255, 123, 0, 0.2);
+  font-size: 0.7rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.calendar-legend {
+  display: flex;
+  gap: 1.5rem;
+  margin-top: 1rem;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+}
+
+.legend-color {
+  width: 16px;
+  height: 16px;
+  border-radius: 4px;
+  margin-right: 0.5rem;
+}
+
+.legend-color.available {
+  background-color: var(--gray-100);
+  border: 1px solid var(--gray-300);
+}
+
+.legend-color.booked {
+  background-color: rgba(255, 123, 0, 0.15);
+  border: 1px solid rgba(255, 123, 0, 0.3);
+}
+
+.legend-color.blocked {
+  background-color: rgba(255, 59, 48, 0.15);
+  border: 1px solid rgba(255, 59, 48, 0.3);
+}
+
+/* Date picker custom styling */
+input[type="date"] {
+  cursor: pointer;
+}
+
+/* Date range selection for the form */
+.date-range-selected {
+  background-color: rgba(255, 123, 0, 0.1);
+}
+
+/* Date modal styles */
+.block-date-modal .date-selector {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+/* Upcoming bookings list */
+#upcomingBookings {
+  margin-top: 1rem;
+}
+
+.booking-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 1rem;
+  border-radius: 8px;
+  background-color: var(--gray-100);
+  margin-bottom: 0.75rem;
+  transition: all 0.2s;
+}
+
+.booking-item:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-sm);
+}
+
+.booking-dates {
+  font-weight: 500;
+  margin-bottom: 0.25rem;
+}
+
+.booking-client {
+  font-size: 0.875rem;
+  color: var(--gray-600);
+}
+
+.booking-status {
+  display: flex;
+  align-items: center;
+}
+
+.booking-status .badge {
+  margin-left: 0.5rem;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+  .calendar-day {
+    height: 60px;
+    padding: 0.25rem;
+  }
+  
+  .day-content {
+    display: none;
+  }
+  
+  .calendar-controls .row {
+    flex-direction: column;
+  }
+  
+  .calendar-controls .col:last-child {
+    margin-top: 1rem;
+    text-align: left;
+  }
+}
+
 /* Alerts */
 .alert {
   padding: 1rem;
