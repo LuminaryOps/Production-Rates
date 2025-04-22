@@ -9,10 +9,31 @@ const Signature = {
   isDrawing: false,
   modal: null,
   hasSigned: false,
+  emailJSInitialized: false,
   
   // Initialize signature module
   init() {
     this.createAcceptButton();
+    this.initEmailJS();
+  },
+  
+  // Initialize EmailJS
+  initEmailJS() {
+    // Add EmailJS library if not already present
+    if (typeof emailjs === 'undefined') {
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/@emailjs/browser@3/dist/email.min.js';
+      script.async = true;
+      script.onload = () => {
+        // Initialize EmailJS with your account ID
+        emailjs.init("YOUR_EMAILJS_PUBLIC_KEY"); // Replace with your public key
+        this.emailJSInitialized = true;
+        console.log('EmailJS initialized');
+      };
+      document.head.appendChild(script);
+    } else {
+      this.emailJSInitialized = true;
+    }
   },
   
   // Create Accept Quote button and add to quote section
@@ -404,112 +425,195 @@ const Signature = {
     // For this demo, we'll just store in the AppState
     AppState.signatureData = signatureData;
     
-    // This function could be extended to:
-    // 1. Push the data to a GitHub issue as requested
-    // 2. Save to Firebase/Firestore
-    // 3. Generate a PDF with the signature
+    // Store in local storage for persistence
+    try {
+      const signatureHistory = JSON.parse(localStorage.getItem('signatureHistory') || '[]');
+      signatureHistory.unshift({
+        id: Date.now(),
+        date: new Date().toISOString(),
+        clientName: signatureData.name,
+        projectName: signatureData.quoteData.project.name || 'Unnamed Project',
+        amount: signatureData.quoteData.total,
+        signatureData
+      });
+      
+      // Keep only the last 50 signatures
+      if (signatureHistory.length > 50) {
+        signatureHistory.length = 50;
+      }
+      
+      localStorage.setItem('signatureHistory', JSON.stringify(signatureHistory));
+    } catch (error) {
+      console.error('Error saving signature history:', error);
+    }
     
     console.log('Signature data saved:', signatureData);
   },
   
   // Send acceptance emails to client and business owner
   sendAcceptanceEmails(signatureData) {
-    // Get required data for emails
+    // Show loading state
+    this.showEmailLoading();
+    
+    // Prepare data for emails
     const clientName = signatureData.name;
     const clientEmail = signatureData.email;
-    const quoteData = signatureData.quoteData;
+    const clientTitle = signatureData.title || '';
     const ownerEmail = AppState.rates.businessInfo.email; // "drewemmett123@gmail.com"
-    const businessName = AppState.rates.businessInfo.name;
-    const formattedDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
-    const formattedTime = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    const projectName = signatureData.quoteData.project.name || 'Unnamed Project';
+    const projectLocation = signatureData.quoteData.project.location || '';
+    const businessName = AppState.rates.businessInfo.name || 'Emmett Technical Production';
+    const quoteTotal = Calculator.formatCurrency(signatureData.quoteData.total);
+    const depositAmount = Calculator.formatCurrency(AppState.depositAmount);
+    const depositPercentage = `${AppState.depositPercentage * 100}%`;
     
-    // Create and send the emails
-    try {
-      // 1. Send confirmation email to client
-      this.sendEmail({
-        to: clientEmail,
-        from: ownerEmail,
-        subject: `Quote Acceptance Confirmation - ${businessName}`,
-        html: this.generateClientEmailContent(signatureData)
-      });
-      
-      // 2. Send notification email to business owner
-      this.sendEmail({
-        to: ownerEmail,
-        from: 'noreply@emmett-production.com',
-        subject: `[QUOTE ACCEPTED] ${clientName} has accepted your quote`,
-        html: this.generateOwnerEmailContent(signatureData)
-      });
-      
-      console.log('Acceptance emails sent successfully');
-    } catch (error) {
-      console.error('Error sending acceptance emails:', error);
-    }
-  },
-  
-  // Send an email (API implementation)
-  sendEmail(options) {
-    // In a production environment, this would connect to a real email sending service
-    // Such as SendGrid, Mailgun, AWS SES, or a custom SMTP server
+    // Create HTML versions of the quote for emails
+    const clientEmailHTML = this.generateClientEmailHTML(signatureData);
+    const ownerEmailHTML = this.generateOwnerEmailHTML(signatureData);
     
-    // For demo purposes, we'll just log the email data
-    console.log('Sending email:', options);
+    // Create email PDF attachment (will be just HTML for now)
+    const pdfData = this.prepareQuotePDF(signatureData);
     
-    // Example implementation using the EmailJS service (would require actual implementation)
-    if (typeof emailjs !== 'undefined') {
-      // This is just a placeholder for what an actual email service implementation would look like
-      // You would need to include the EmailJS library and configure it with your account details
-      emailjs.send('service_id', 'template_id', {
-        to_email: options.to,
-        from_email: options.from,
-        subject: options.subject,
-        message_html: options.html
-      }).then(
+    // Promise array to track email sending
+    const emailPromises = [];
+    
+    // 1. Send client confirmation email
+    if (this.emailJSInitialized) {
+      const clientEmailPromise = emailjs.send(
+        'default_service', // Replace with your EmailJS service ID
+        'client_quote_acceptance', // Replace with your EmailJS template ID
+        {
+          to_name: clientName,
+          to_email: clientEmail,
+          from_name: businessName,
+          project_name: projectName,
+          quote_total: quoteTotal,
+          deposit_amount: depositAmount,
+          deposit_percentage: depositPercentage,
+          accept_date: new Date().toLocaleDateString(),
+          signed_quote_html: clientEmailHTML,
+          reply_to: ownerEmail
+        }
+      ).then(
         response => {
-          console.log('Email sent:', response);
+          console.log('Client confirmation email sent successfully:', response);
+          return true;
         },
         error => {
-          console.error('Email error:', error);
+          console.error('Error sending client confirmation email:', error);
+          return false;
         }
       );
+      
+      emailPromises.push(clientEmailPromise);
+      
+      // 2. Send owner notification email
+      const ownerEmailPromise = emailjs.send(
+        'default_service', // Replace with your EmailJS service ID
+        'owner_quote_notification', // Replace with your EmailJS template ID
+        {
+          owner_email: ownerEmail,
+          client_name: clientName,
+          client_email: clientEmail,
+          client_title: clientTitle,
+          project_name: projectName,
+          project_location: projectLocation,
+          quote_total: quoteTotal,
+          deposit_amount: depositAmount,
+          deposit_percentage: depositPercentage,
+          accept_date: new Date().toLocaleDateString(),
+          accept_time: new Date().toLocaleTimeString(),
+          signature_image: signatureData.signature,
+          signed_quote_html: ownerEmailHTML
+        }
+      ).then(
+        response => {
+          console.log('Owner notification email sent successfully:', response);
+          return true;
+        },
+        error => {
+          console.error('Error sending owner notification email:', error);
+          return false;
+        }
+      );
+      
+      emailPromises.push(ownerEmailPromise);
+      
+      // Wait for all emails to be sent
+      Promise.all(emailPromises)
+        .then(results => {
+          this.hideEmailLoading();
+          
+          // Check if all emails were sent successfully
+          const allSuccess = results.every(result => result === true);
+          
+          if (!allSuccess) {
+            console.warn('Some emails failed to send.');
+            alert('Some confirmation emails could not be sent. Please contact us directly to confirm your quote acceptance.');
+          }
+        })
+        .catch(error => {
+          this.hideEmailLoading();
+          console.error('Error in email sending process:', error);
+          alert('There was an error sending confirmation emails. Please contact us directly to confirm your quote acceptance.');
+        });
     } else {
-      // Example implementation in a Node.js server environment using Nodemailer
-      // This would be if you're using a backend service to handle emails
-      /*
-      const nodemailer = require('nodemailer');
-      
-      const transporter = nodemailer.createTransport({
-        service: 'gmail',
-        auth: {
-          user: 'drewemmett123@gmail.com',
-          pass: 'your-app-password' // Use app password for Gmail
-        }
-      });
-      
-      const mailOptions = {
-        from: options.from,
-        to: options.to,
-        subject: options.subject,
-        html: options.html
-      };
-      
-      transporter.sendMail(mailOptions, (error, info) => {
-        if (error) {
-          console.error('Email error:', error);
-        } else {
-          console.log('Email sent:', info.response);
-        }
-      });
-      */
+      // EmailJS not initialized, show error
+      this.hideEmailLoading();
+      console.error('EmailJS not initialized. Unable to send emails.');
+      alert('Unable to send confirmation emails due to a technical issue. Please contact us directly to confirm your quote acceptance.');
     }
   },
   
-  // Generate email content for client
-  generateClientEmailContent(signatureData) {
+  // Show email sending loading state
+  showEmailLoading() {
+    // Create loading overlay if it doesn't exist
+    let loadingOverlay = document.getElementById('emailLoadingOverlay');
+    
+    if (!loadingOverlay) {
+      loadingOverlay = document.createElement('div');
+      loadingOverlay.id = 'emailLoadingOverlay';
+      loadingOverlay.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background-color: rgba(0, 0, 0, 0.7);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 1100;
+        color: white;
+      `;
+      
+      loadingOverlay.innerHTML = `
+        <div class="loading-spinner" style="width: 50px; height: 50px; margin-bottom: 1rem;"></div>
+        <div style="font-size: 1.25rem; margin-bottom: 0.5rem;">Sending Confirmation Emails</div>
+        <div style="font-size: 0.875rem; color: rgba(255, 255, 255, 0.8);">Please wait...</div>
+      `;
+      
+      document.body.appendChild(loadingOverlay);
+    } else {
+      loadingOverlay.style.display = 'flex';
+    }
+  },
+  
+  // Hide email sending loading state
+  hideEmailLoading() {
+    const loadingOverlay = document.getElementById('emailLoadingOverlay');
+    if (loadingOverlay) {
+      loadingOverlay.style.display = 'none';
+    }
+  },
+  
+  // Generate HTML content for client email
+  generateClientEmailHTML(signatureData) {
     const clientName = signatureData.name;
     const quoteData = signatureData.quoteData;
-    const businessName = AppState.rates.businessInfo.name;
-    const businessEmail = AppState.rates.businessInfo.email;
+    const businessName = AppState.rates.businessInfo.name || 'Emmett Technical Production';
+    const businessEmail = AppState.rates.businessInfo.email || 'drewemmett123@gmail.com';
     const formattedDate = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
     const formattedTime = new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
     
@@ -556,28 +660,6 @@ const Signature = {
       notesHtml += `<li style="margin-bottom: 8px;">${note}</li>`;
     });
     
-    // Generate signature HTML
-    const signatureHtml = `
-      <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #dee2e6;">
-        <h4 style="font-size: 18px; margin-bottom: 15px;">Accepted By:</h4>
-        <table style="width: 100%;">
-          <tr>
-            <td style="width: 50%;">
-              <div style="font-weight: bold;">${signatureData.name}</div>
-              ${signatureData.title ? `<div style="color: #6c757d; font-size: 14px;">${signatureData.title}</div>` : ''}
-              <div style="color: #6c757d; font-size: 14px;">${signatureData.email}</div>
-            </td>
-            <td style="width: 50%; text-align: right;">
-              <img src="${signatureData.signature}" alt="Signature" style="height: 60px; max-width: 200px;">
-              <div style="color: #6c757d; font-size: 12px; margin-top: 5px;">
-                ${formattedDate} ${formattedTime}
-              </div>
-            </td>
-          </tr>
-        </table>
-      </div>
-    `;
-    
     // Compile the complete email HTML
     return `
       <!DOCTYPE html>
@@ -623,7 +705,24 @@ const Signature = {
             </ul>
           </div>
           
-          ${signatureHtml}
+          <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #dee2e6;">
+            <h4 style="font-size: 18px; margin-bottom: 15px;">Accepted By:</h4>
+            <table style="width: 100%;">
+              <tr>
+                <td style="width: 50%;">
+                  <div style="font-weight: bold;">${signatureData.name}</div>
+                  ${signatureData.title ? `<div style="color: #6c757d; font-size: 14px;">${signatureData.title}</div>` : ''}
+                  <div style="color: #6c757d; font-size: 14px;">${signatureData.email}</div>
+                </td>
+                <td style="width: 50%; text-align: right;">
+                  <img src="${signatureData.signature}" alt="Signature" style="height: 60px; max-width: 200px;">
+                  <div style="color: #6c757d; font-size: 12px; margin-top: 5px;">
+                    ${formattedDate} ${formattedTime}
+                  </div>
+                </td>
+              </tr>
+            </table>
+          </div>
           
           <div style="margin-top: 30px; text-align: center; color: #6c757d; font-size: 14px; border-top: 1px solid #dee2e6; padding-top: 20px;">
             <p>If you have any questions, please contact us at <a href="mailto:${businessEmail}" style="color: #ff7b00;">${businessEmail}</a>.</p>
@@ -635,8 +734,8 @@ const Signature = {
     `;
   },
   
-  // Generate email content for owner notification
-  generateOwnerEmailContent(signatureData) {
+  // Generate HTML content for owner notification email
+  generateOwnerEmailHTML(signatureData) {
     const clientName = signatureData.name;
     const clientEmail = signatureData.email;
     const clientTitle = signatureData.title;
@@ -732,12 +831,11 @@ const Signature = {
     `;
   },
   
-  // Generate a PDF of the quote with signature
-  generateQuotePDF(signatureData) {
-    // In a production environment, this would use a PDF generation library
-    // For demo purposes, we'll just return the HTML content
-    const quoteContent = this.generateClientEmailContent(signatureData);
-    return quoteContent;
+  // Prepare PDF version of signed quote (currently returns HTML)
+  prepareQuotePDF(signatureData) {
+    // In a production environment, you would use a PDF library
+    // For the current implementation, we'll just return the HTML content
+    return this.generateClientEmailHTML(signatureData);
   },
   
   // Show acceptance confirmation
