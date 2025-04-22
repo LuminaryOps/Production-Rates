@@ -1,7 +1,6 @@
 /**
- * Modified Main Application Controller
+ * Main Application Controller
  * Emmett's Production Rate Calculator
- * Added PIN Authentication
  */
 
 // Global app state
