@@ -72,31 +72,6 @@ const History = {
     // Add tab content to container
     document.querySelector('.tabs').parentNode.appendChild(tabContent);
     
-    // Note: The click handler for the history tab is now managed in UI.js
-    // to handle PIN authentication
-    
-    // Add search/filter functionality
-    document.getElementById('historySearch').addEventListener('input', this.refreshHistoryDisplay.bind(this));
-    document.getElementById('historyFilter').addEventListener('change', this.refreshHistoryDisplay.bind(this));
-  }
-    
-    // Add tab content to container
-    document.querySelector('.tabs').parentNode.appendChild(tabContent);
-    
-    // Add event listeners
-    historyTab.addEventListener('click', () => {
-      // Remove active class from all tabs and tab contents
-      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-      
-      // Add active class to history tab and content
-      historyTab.classList.add('active');
-      tabContent.classList.add('active');
-      
-      // Refresh history display
-      this.refreshHistoryDisplay();
-    });
-    
     // Add search/filter functionality
     document.getElementById('historySearch').addEventListener('input', this.refreshHistoryDisplay.bind(this));
     document.getElementById('historyFilter').addEventListener('change', this.refreshHistoryDisplay.bind(this));
