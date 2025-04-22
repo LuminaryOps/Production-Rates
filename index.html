@@ -146,6 +146,36 @@
           </div>
         </div>
         
+        <!-- Project Dates Section -->
+        <h2><i class="fas fa-calendar-day"></i> Project Dates</h2>
+        <div class="note">
+          <div class="note-header">
+            <i class="fas fa-info-circle"></i> Important
+          </div>
+          <p>Please select the actual event/project dates. Travel days (if applicable) will be calculated separately.</p>
+        </div>
+        <div class="row">
+          <div class="col">
+            <div class="form-group">
+              <label for="projectStartDate">Start Date *</label>
+              <input type="date" id="projectStartDate" required>
+            </div>
+          </div>
+          <div class="col">
+            <div class="form-group">
+              <label for="projectEndDate">End Date *</label>
+              <input type="date" id="projectEndDate" required>
+            </div>
+          </div>
+        </div>
+        <div id="dateUnavailableWarning" class="alert alert-danger" style="display: none;">
+          <i class="fas fa-exclamation-circle"></i>
+          <div>
+            <strong>Date Conflict Detected!</strong>
+            <p>One or more of your selected dates are unavailable. Please select different dates or contact for assistance.</p>
+          </div>
+        </div>
+        
         <h2><i class="fas fa-code-branch"></i> Specialty Services</h2>
         
         <!-- Multiple Specialty Services Section -->
@@ -531,6 +561,76 @@
       </div>
     </div>
     
+    <!-- Calendar Tab -->
+    <div id="calendar" class="tab-content">
+      <div class="card">
+        <h2><i class="fas fa-calendar-alt"></i> Availability Calendar</h2>
+        
+        <!-- Calendar controls -->
+        <div class="calendar-controls">
+          <div class="row">
+            <div class="col">
+              <div class="month-nav">
+                <button id="prevMonth" class="btn btn-outline btn-sm">
+                  <i class="fas fa-chevron-left"></i>
+                </button>
+                <h3 id="currentMonth">April 2025</h3>
+                <button id="nextMonth" class="btn btn-outline btn-sm">
+                  <i class="fas fa-chevron-right"></i>
+                </button>
+              </div>
+            </div>
+            <div class="col" style="text-align: right;">
+              <button id="blockDateBtn" class="btn btn-outline btn-sm">
+                <i class="fas fa-ban"></i> Block Dates
+              </button>
+              <button id="exportCalendarBtn" class="btn btn-outline btn-sm">
+                <i class="fas fa-file-export"></i> Export Calendar
+              </button>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Calendar grid -->
+        <div class="calendar-container">
+          <div class="calendar-header">
+            <div>Sun</div>
+            <div>Mon</div>
+            <div>Tue</div>
+            <div>Wed</div>
+            <div>Thu</div>
+            <div>Fri</div>
+            <div>Sat</div>
+          </div>
+          <div id="calendarGrid" class="calendar-grid">
+            <!-- Calendar days will be generated here -->
+          </div>
+        </div>
+        
+        <!-- Legend -->
+        <div class="calendar-legend">
+          <div class="legend-item">
+            <div class="legend-color available"></div>
+            <span>Available</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-color booked"></div>
+            <span>Booked</span>
+          </div>
+          <div class="legend-item">
+            <div class="legend-color blocked"></div>
+            <span>Blocked</span>
+          </div>
+        </div>
+        
+        <!-- Upcoming bookings -->
+        <h3 style="margin-top: 2rem;"><i class="fas fa-clock"></i> Upcoming Bookings</h3>
+        <div id="upcomingBookings">
+          <!-- Bookings will be listed here -->
+        </div>
+      </div>
+    </div>
+    
     <!-- History Tab will be added dynamically by JavaScript -->
   </div>
   
@@ -545,7 +645,8 @@
   <script src="js/signature.js"></script>
   <script src="js/payment.js"></script>
   <script src="js/history.js"></script>
-  <script src="js/pin-auth.js"></script> <!-- Added this line to fix the error -->
+  <script src="js/pin-auth.js"></script>
+  <script src="js/calendar.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>
