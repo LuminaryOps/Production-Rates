@@ -25,7 +25,7 @@ const History = {
     const historyTab = document.createElement('div');
     historyTab.className = 'tab';
     historyTab.setAttribute('data-tab', 'history');
-    historyTab.innerHTML = '<i class="fas fa-history"></i> History';
+    historyTab.innerHTML = '<i class="fas fa-history"></i> History <i class="fas fa-lock" style="font-size: 0.75em; margin-left: 0.5rem;"></i>';
     
     // Add tab
     tabsContainer.appendChild(historyTab);
@@ -68,6 +68,17 @@ const History = {
         </div>
       </div>
     `;
+    
+    // Add tab content to container
+    document.querySelector('.tabs').parentNode.appendChild(tabContent);
+    
+    // Note: The click handler for the history tab is now managed in UI.js
+    // to handle PIN authentication
+    
+    // Add search/filter functionality
+    document.getElementById('historySearch').addEventListener('input', this.refreshHistoryDisplay.bind(this));
+    document.getElementById('historyFilter').addEventListener('change', this.refreshHistoryDisplay.bind(this));
+  }
     
     // Add tab content to container
     document.querySelector('.tabs').parentNode.appendChild(tabContent);
