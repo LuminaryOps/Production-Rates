@@ -118,14 +118,33 @@ const UI = {
   initTabs() {
     this.elements.tabs.forEach(tab => {
       tab.addEventListener('click', () => {
-        // Remove active class from all tabs and contents
-        this.elements.tabs.forEach(t => t.classList.remove('active'));
-        this.elements.tabContents.forEach(c => c.classList.remove('active'));
-        
-        // Add active class to clicked tab and content
-        tab.classList.add('active');
         const tabId = tab.getAttribute('data-tab');
-        document.getElementById(tabId).classList.add('active');
+        
+        // If trying to access history tab, require PIN authentication
+        if (tabId === 'history') {
+          PinAuth.verifyPin(() => {
+            // This will run after successful PIN verification
+            // Remove active class from all tabs and contents
+            this.elements.tabs.forEach(t => t.classList.remove('active'));
+            this.elements.tabContents.forEach(c => c.classList.remove('active'));
+            
+            // Add active class to history tab and content
+            tab.classList.add('active');
+            document.getElementById(tabId).classList.add('active');
+            
+            // Refresh history display
+            History.refreshHistoryDisplay();
+          });
+        } else {
+          // For other tabs, proceed normally
+          // Remove active class from all tabs and contents
+          this.elements.tabs.forEach(t => t.classList.remove('active'));
+          this.elements.tabContents.forEach(c => c.classList.remove('active'));
+          
+          // Add active class to clicked tab and content
+          tab.classList.add('active');
+          document.getElementById(tabId).classList.add('active');
+        }
       });
     });
   },
@@ -370,87 +389,92 @@ const UI = {
   
   // Generate invoice from quote
   handleGenerateInvoice() {
-    // Build invoice number with current date format YYYYMMDD-XXX
-    const now = new Date();
-    const dateStr = now.getFullYear() + 
+    // Require PIN verification before generating invoice
+    PinAuth.verifyPin(() => {
+      // This will run after successful PIN verification
+      
+      // Build invoice number with current date format YYYYMMDD-XXX
+      const now = new Date();
+      const dateStr = now.getFullYear() + 
                     (now.getMonth() + 1).toString().padStart(2, '0') + 
                     now.getDate().toString().padStart(2, '0');
-    
-    const defaultInvoiceNum = `INV-${dateStr}-001`;
-    
-    // Get invoice details from user
-    const invoiceNum = prompt('Enter Invoice Number:', defaultInvoiceNum) || defaultInvoiceNum;
-    this.elements.invoiceNumber.textContent = invoiceNum;
-    
-    // Ask about deposit payment
-    const depositPaid = confirm(`Has the ${AppState.depositPercentage * 100}% deposit (${Calculator.formatCurrency(AppState.depositAmount)}) been paid?`);
-    
-    // Get client name
-    const clientName = this.elements.clientName.value.trim() || prompt('Client Name:', '') || 'Client';
-    this.elements.invoiceClient.textContent = clientName;
-    
-    // Set project name
-    this.elements.invoiceProject.textContent = this.elements.projectName.value.trim() || 'Technical Production Services';
-    
-    // Set invoice date
-    const dateOptions = { year: 'numeric', month: 'long', day: 'numeric' };
-    const formattedDate = now.toLocaleDateString('en-US', dateOptions);
-    this.elements.invoiceDate.textContent = formattedDate;
-    
-    // Set datetime
-    const timeOptions = { hour: '2-digit', minute: '2-digit' };
-    const formattedDateTime = `Created on ${formattedDate} at ${now.toLocaleTimeString('en-US', timeOptions)}`;
-    this.elements.invoiceDateTime.textContent = formattedDateTime;
-    
-    // Generate invoice data
-    const invoiceData = Calculator.generateInvoice(AppState.quoteData, {
-      invoiceNumber: invoiceNum,
-      date: formattedDate,
-      dateTime: formattedDateTime,
-      client: clientName,
-      depositPaid: depositPaid
-    });
-    
-    AppState.invoiceData = invoiceData;
-    
-    // Clone quote rows
-    this.elements.invoiceBody.innerHTML = '';
-    let subtotal = 0;
-    
-    Array.from(this.elements.quoteBody.children).forEach(row => {
-      const service = row.cells[0].textContent;
-      if (service === 'Quote Date' || service === 'Quote Valid Until') return;
       
-      const clone = row.cloneNode(true);
-      this.elements.invoiceBody.appendChild(clone);
+      const defaultInvoiceNum = `INV-${dateStr}-001`;
       
-      if (service !== 'TOTAL') {
-        const amt = parseFloat(clone.cells[3].textContent.replace(/[^0-9.-]/g, '')) || 0;
-        subtotal += amt;
+      // Get invoice details from user
+      const invoiceNum = prompt('Enter Invoice Number:', defaultInvoiceNum) || defaultInvoiceNum;
+      this.elements.invoiceNumber.textContent = invoiceNum;
+      
+      // Ask about deposit payment
+      const depositPaid = confirm(`Has the ${AppState.depositPercentage * 100}% deposit (${Calculator.formatCurrency(AppState.depositAmount)}) been paid?`);
+      
+      // Get client name
+      const clientName = this.elements.clientName.value.trim() || prompt('Client Name:', '') || 'Client';
+      this.elements.invoiceClient.textContent = clientName;
+      
+      // Set project name
+      this.elements.invoiceProject.textContent = this.elements.projectName.value.trim() || 'Technical Production Services';
+      
+      // Set invoice date
+      const dateOptions = { year: 'numeric', month: 'long', day: 'numeric' };
+      const formattedDate = now.toLocaleDateString('en-US', dateOptions);
+      this.elements.invoiceDate.textContent = formattedDate;
+      
+      // Set datetime
+      const timeOptions = { hour: '2-digit', minute: '2-digit' };
+      const formattedDateTime = `Created on ${formattedDate} at ${now.toLocaleTimeString('en-US', timeOptions)}`;
+      this.elements.invoiceDateTime.textContent = formattedDateTime;
+      
+      // Generate invoice data
+      const invoiceData = Calculator.generateInvoice(AppState.quoteData, {
+        invoiceNumber: invoiceNum,
+        date: formattedDate,
+        dateTime: formattedDateTime,
+        client: clientName,
+        depositPaid: depositPaid
+      });
+      
+      AppState.invoiceData = invoiceData;
+      
+      // Clone quote rows
+      this.elements.invoiceBody.innerHTML = '';
+      let subtotal = 0;
+      
+      Array.from(this.elements.quoteBody.children).forEach(row => {
+        const service = row.cells[0].textContent;
+        if (service === 'Quote Date' || service === 'Quote Valid Until') return;
+        
+        const clone = row.cloneNode(true);
+        this.elements.invoiceBody.appendChild(clone);
+        
+        if (service !== 'TOTAL') {
+          const amt = parseFloat(clone.cells[3].textContent.replace(/[^0-9.-]/g, '')) || 0;
+          subtotal += amt;
+        }
+      });
+      
+      // Set summary amounts
+      this.elements.invoiceSubtotal.textContent = Calculator.formatCurrency(subtotal);
+      
+      // Handle deposit
+      if (depositPaid) {
+        this.elements.depositRow.style.display = 'flex';
+        this.elements.invoiceDeposit.textContent = `- ${Calculator.formatCurrency(AppState.depositAmount)}`;
+        this.elements.invoiceTotal.textContent = Calculator.formatCurrency(subtotal - AppState.depositAmount);
+        AppState.isPaid = true;
+      } else {
+        this.elements.depositRow.style.display = 'none';
+        this.elements.invoiceTotal.textContent = Calculator.formatCurrency(subtotal);
+        AppState.isPaid = false;
       }
+      
+      // Hide quote, show invoice
+      this.elements.quoteSection.style.display = 'none';
+      this.elements.invoiceSection.style.display = 'block';
+      
+      // Add payment buttons to invoice
+      this.addPaymentButtons(depositPaid);
     });
-    
-    // Set summary amounts
-    this.elements.invoiceSubtotal.textContent = Calculator.formatCurrency(subtotal);
-    
-    // Handle deposit
-    if (depositPaid) {
-      this.elements.depositRow.style.display = 'flex';
-      this.elements.invoiceDeposit.textContent = `- ${Calculator.formatCurrency(AppState.depositAmount)}`;
-      this.elements.invoiceTotal.textContent = Calculator.formatCurrency(subtotal - AppState.depositAmount);
-      AppState.isPaid = true;
-    } else {
-      this.elements.depositRow.style.display = 'none';
-      this.elements.invoiceTotal.textContent = Calculator.formatCurrency(subtotal);
-      AppState.isPaid = false;
-    }
-    
-    // Hide quote, show invoice
-    this.elements.quoteSection.style.display = 'none';
-    this.elements.invoiceSection.style.display = 'block';
-    
-    // Add payment buttons to invoice
-    this.addPaymentButtons(depositPaid);
   },
   
   // Add payment buttons to invoice
