@@ -114,7 +114,7 @@ const UI = {
     });
   },
   
-  // Initialize tabs functionality
+  // Initialize tabs functionality with PIN protection for history tab
   initTabs() {
     this.elements.tabs.forEach(tab => {
       tab.addEventListener('click', () => {
@@ -387,12 +387,10 @@ const UI = {
     this.elements.quoteNotes.innerHTML = notes.map(n => `• ${n}`).join('<br>');
   },
   
-  // Generate invoice from quote
+  // Generate invoice from quote with PIN protection
   handleGenerateInvoice() {
     // Require PIN verification before generating invoice
     PinAuth.verifyPin(() => {
-      // This will run after successful PIN verification
-      
       // Build invoice number with current date format YYYYMMDD-XXX
       const now = new Date();
       const dateStr = now.getFullYear() + 
