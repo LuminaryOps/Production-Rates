@@ -197,6 +197,32 @@ input, select, textarea {
   -webkit-appearance: none;
 }
 
+/* Override global input styles for checkboxes */
+input[type="checkbox"] {
+  width: auto;
+  height: auto;
+  padding: 0;
+  margin-right: 0.5rem;
+  margin-top: 0.3rem;
+  border-radius: 3px;
+  -webkit-appearance: checkbox;
+  appearance: checkbox;
+  cursor: pointer;
+}
+
+/* Focus style for checkboxes */
+input[type="checkbox"]:focus {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+  box-shadow: none;
+}
+
+/* Checked state for checkboxes */
+input[type="checkbox"]:checked {
+  background-color: var(--primary);
+  border-color: var(--primary);
+}
+
 input:focus, select:focus, textarea:focus {
   outline: none;
   border-color: var(--primary);
