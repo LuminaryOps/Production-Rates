@@ -448,6 +448,68 @@ const Payment = {
     // Update app state
     if (paymentType === 'deposit') {
       AppState.isPaid = true;
+      
+      // Update calendar booking to mark deposit as paid
+      if (paymentType === 'deposit' && Calendar && AppState.selectedDates) {
+        const startDate = new Date(AppState.selectedDates.startDate);
+        const endDate = new Date(AppState.selectedDates.endDate);
+        
+        // If we have valid dates, update status in all relevant bookings
+        if (startDate && endDate && startDate <= endDate) {
+          // Clone date to avoid modifying the original
+          let currentDate = new Date(startDate);
+          
+          // Update each day in the range
+          while (currentDate <= endDate) {
+            const dateStr = currentDate.toISOString().split('T')[0];
+            
+            if (Calendar.bookedDates[dateStr]) {
+              Calendar.bookedDates[dateStr].depositPaid = true;
+            }
+            
+            // Move to next day
+            currentDate.setDate(currentDate.getDate() + 1);
+          }
+          
+          // Also update travel days if any
+          const travelDays = parseInt(document.getElementById('travelDays').value) || 0;
+          if (travelDays > 0) {
+            // Travel days before start date
+            let beforeTravel = new Date(startDate);
+            beforeTravel.setDate(beforeTravel.getDate() - travelDays);
+            
+            for (let i = 0; i < travelDays; i++) {
+              const travelDateStr = beforeTravel.toISOString().split('T')[0];
+              if (Calendar.bookedDates[travelDateStr]) {
+                Calendar.bookedDates[travelDateStr].depositPaid = true;
+              }
+              beforeTravel.setDate(beforeTravel.getDate() + 1);
+            }
+            
+            // Travel days after end date
+            let afterTravel = new Date(endDate);
+            afterTravel.setDate(afterTravel.getDate() + 1);
+            
+            for (let i = 0; i < travelDays; i++) {
+              const travelDateStr = afterTravel.toISOString().split('T')[0];
+              if (Calendar.bookedDates[travelDateStr]) {
+                Calendar.bookedDates[travelDateStr].depositPaid = true;
+              }
+              afterTravel.setDate(afterTravel.getDate() + 1);
+            }
+          }
+          
+          // Save updated availability
+          Calendar.saveAvailability();
+          // Refresh calendar if visible
+          if (document.getElementById('calendar').classList.contains('active')) {
+            Calendar.renderCalendar();
+            Calendar.renderUpcomingBookings();
+          }
+          
+          console.log('Calendar updated with deposit payment status');
+        }
+      }
     }
     
     // Update invoice display
