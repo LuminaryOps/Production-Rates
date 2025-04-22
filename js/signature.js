@@ -408,6 +408,31 @@ const Signature = {
     // Save the signature data
     this.saveSignature(signatureData);
     
+    // Book the project dates in the calendar
+    if (AppState.selectedDates && Calendar) {
+      const startDate = new Date(AppState.selectedDates.startDate);
+      const endDate = new Date(AppState.selectedDates.endDate);
+      
+      // Handle edge case
+      if (startDate && endDate && startDate <= endDate) {
+        const clientData = {
+          clientName: document.getElementById('clientName').value.trim() || 'Unnamed Client',
+          projectName: document.getElementById('projectName').value.trim() || 'Unnamed Project',
+          projectLocation: document.getElementById('projectLocation').value.trim() || '',
+          depositPaid: false, // Will be updated when deposit is paid
+          notes: 'Quote accepted on ' + new Date().toLocaleDateString(),
+          quoteId: AppState.quoteData.id || Date.now(),
+          travelDays: parseInt(document.getElementById('travelDays').value) || 0
+        };
+        
+        Calendar.bookDateRange(startDate, endDate, clientData);
+        
+        console.log('Project dates booked in calendar:', startDate, 'to', endDate);
+      } else {
+        console.warn('Invalid date range, calendar not updated');
+      }
+    }
+    
     // Send emails
     this.sendAcceptanceEmails(signatureData);
     
