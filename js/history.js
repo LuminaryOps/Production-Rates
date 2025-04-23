@@ -123,31 +123,24 @@ const History = {
     });
   },
   
-  // Load history from repository
+  // Load history from Netlify or initialize empty
   async loadHistory() {
     try {
-      // Check if GitHub integration is enabled
-      if (AppState.usingGitHub && GitHub.checkAuth()) {
-        // Load from GitHub
-        const githubHistory = await GitHub.loadHistory();
-        if (githubHistory && githubHistory.length > 0) {
-          this.historyData = githubHistory;
-          console.log('History loaded from GitHub:', this.historyData.length, 'items');
+      // Check if Netlify integration is enabled
+      if (AppState.usingNetlify && NetlifyStorage.checkAuth()) {
+        // Load from Netlify
+        const netlifyHistory = await NetlifyStorage.loadHistory();
+        if (netlifyHistory && netlifyHistory.length > 0) {
+          this.historyData = netlifyHistory;
+          console.log('History loaded from Netlify:', this.historyData.length, 'items');
           return;
         }
       }
       
-      // Fallback to localStorage if GitHub not available or empty
-      const storedHistory = localStorage.getItem('quoteHistory');
-      if (storedHistory) {
-        this.historyData = JSON.parse(storedHistory);
-        console.log('History loaded from localStorage:', this.historyData.length, 'items');
-        
-        // If GitHub is available, sync localStorage data to GitHub
-        if (AppState.usingGitHub && GitHub.checkAuth()) {
-          this.syncLocalToGitHub();
-        }
-      }
+      // Initialize with empty history if nothing found
+      this.historyData = [];
+      console.log('No history data found, initialized with empty array');
+      
     } catch (error) {
       console.error('Error loading history:', error);
       
@@ -156,50 +149,28 @@ const History = {
     }
   },
   
-  // Sync localStorage history to GitHub
-  async syncLocalToGitHub() {
-    if (!AppState.usingGitHub || !GitHub.checkAuth() || this.historyData.length === 0) return;
-    
-    try {
-      console.log('Syncing history to GitHub...');
-      await GitHub.saveHistory(this.historyData);
-      console.log('History synced to GitHub successfully');
-    } catch (error) {
-      console.error('Error syncing history to GitHub:', error);
-    }
-  },
-  
   // Save history
   async saveHistory() {
     try {
-      // Save to GitHub if available
-      if (AppState.usingGitHub && GitHub.checkAuth()) {
-        await GitHub.saveHistory(this.historyData);
-        console.log('History saved to GitHub');
+      // Save to Netlify if available
+      if (AppState.usingNetlify && NetlifyStorage.checkAuth()) {
+        await NetlifyStorage.saveHistory(this.historyData);
+        console.log('History saved to Netlify');
+      } else {
+        console.log('Netlify storage not available, history not saved');
       }
-      
-      // Also save to localStorage as fallback
-      localStorage.setItem('quoteHistory', JSON.stringify(this.historyData));
     } catch (error) {
       console.error('Error saving history:', error);
-      
-      // Fallback to localStorage
-      try {
-        localStorage.setItem('quoteHistory', JSON.stringify(this.historyData));
-        console.log('History saved to localStorage (GitHub failed)');
-      } catch (localError) {
-        console.error('Error saving to localStorage:', localError);
-      }
     }
   },
   
-  // Update history data from GitHub
+  // Update history data from Netlify
   updateHistoryData(newData) {
     if (!newData || newData.length === 0) return;
     
     this.historyData = newData;
     this.refreshHistoryDisplay();
-    console.log('History data updated from GitHub');
+    console.log('History data updated from Netlify');
   },
   
   // Create a unique ID for history items
@@ -271,10 +242,10 @@ const History = {
     const searchTerm = document.getElementById('historySearch').value.toLowerCase();
     const filter = document.getElementById('historyFilter').value;
     
-    // Check if GitHub authentication is required
-    if (AppState.usingGitHub && !GitHub.checkAuth()) {
+    // Check if Netlify authentication is required
+    if (AppState.usingNetlify && !NetlifyStorage.checkAuth()) {
       historyList.innerHTML = '';
-      historyList.appendChild(GitHubAuth.showAuthRequired('GitHub Authentication Required for History'));
+      historyList.appendChild(NetlifyAuth.showAuthRequired('Authentication Required for History'));
       return;
     }
     
@@ -527,7 +498,7 @@ const History = {
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Emmett's ${item.type === 'quote' ? 'Quote' : 'Invoice'}</title>
+        <title>LuminaryOps ${item.type === 'quote' ? 'Quote' : 'Invoice'}</title>
         ${styleLinks}
         ${inlineStyles}
         <style>
