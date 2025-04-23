@@ -9,6 +9,7 @@ const Calendar = {
   blockedDates: {},
   bookedDates: {},
   modal: null,
+  bookingDetailsModal: null,
   
   // Initialize calendar module
   init() {
@@ -327,14 +328,340 @@ const Calendar = {
     const booking = this.bookedDates[dateStr];
     if (!booking) return;
     
-    alert(`
-Booking Details for ${dateStr}
-
-Client: ${booking.clientName || 'Unnamed Client'}
-Project: ${booking.projectName || 'Unnamed Project'}
-${booking.projectLocation ? 'Location: ' + booking.projectLocation : ''}
-${booking.notes ? 'Notes: ' + booking.notes : ''}
-    `);
+    // Find the full date range for this booking
+    const bookingRange = this.findBookingDateRange(dateStr, booking);
+    
+    // Create modal if it doesn't exist yet
+    if (!this.bookingDetailsModal) {
+      this.createBookingDetailsModal();
+    }
+    
+    const modal = this.bookingDetailsModal;
+    const modalContent = modal.querySelector('.modal-content');
+    
+    // Format dates
+    const startDate = new Date(bookingRange.startDate);
+    const endDate = new Date(bookingRange.endDate);
+    const formatOptions = { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' };
+    const startDateFormatted = startDate.toLocaleDateString('en-US', formatOptions);
+    const endDateFormatted = endDate.toLocaleDateString('en-US', formatOptions);
+    const singleDayBooking = startDateFormatted === endDateFormatted;
+    
+    // Update modal title and content
+    modalContent.querySelector('.modal-title').textContent = `Booking Details: ${booking.clientName || 'Unnamed Client'}`;
+    
+    const detailsContent = modalContent.querySelector('.booking-details-content');
+    detailsContent.innerHTML = `
+      <div class="booking-detail-row">
+        <div class="booking-detail-label">Client:</div>
+        <div class="booking-detail-value">${booking.clientName || 'Unnamed Client'}</div>
+      </div>
+      <div class="booking-detail-row">
+        <div class="booking-detail-label">Project:</div>
+        <div class="booking-detail-value">${booking.projectName || 'Unnamed Project'}</div>
+      </div>
+      ${booking.projectLocation ? `
+      <div class="booking-detail-row">
+        <div class="booking-detail-label">Location:</div>
+        <div class="booking-detail-value">${booking.projectLocation}</div>
+      </div>
+      ` : ''}
+      <div class="booking-detail-row">
+        <div class="booking-detail-label">Date${singleDayBooking ? '' : 's'}:</div>
+        <div class="booking-detail-value">
+          ${singleDayBooking ? startDateFormatted : `${startDateFormatted} to ${endDateFormatted}`}
+        </div>
+      </div>
+      <div class="booking-detail-row">
+        <div class="booking-detail-label">Status:</div>
+        <div class="booking-detail-value">
+          <span class="badge ${booking.depositPaid ? 'badge-success' : 'badge-primary'}">
+            ${booking.depositPaid ? 'Deposit Paid' : 'Confirmed'}
+          </span>
+        </div>
+      </div>
+      ${booking.notes ? `
+      <div class="booking-detail-row">
+        <div class="booking-detail-label">Notes:</div>
+        <div class="booking-detail-value">${booking.notes}</div>
+      </div>
+      ` : ''}
+    `;
+    
+    // Store booking data in modal for reference in cancel function
+    modal.dataset.startDate = bookingRange.startDate;
+    modal.dataset.endDate = bookingRange.endDate;
+    
+    // Show the cancel button (always show for now, but could be conditional)
+    const cancelBtn = modalContent.querySelector('#cancelBookingBtn');
+    cancelBtn.style.display = 'inline-block';
+    
+    // Show the modal
+    modal.style.display = 'flex';
+  },
+  
+  // Create booking details modal
+  createBookingDetailsModal() {
+    // Create modal element
+    const modal = document.createElement('div');
+    modal.className = 'booking-details-modal';
+    modal.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(0, 0, 0, 0.7);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 1rem;
+    `;
+    
+    // Create modal content
+    const content = document.createElement('div');
+    content.className = 'modal-content';
+    content.style.cssText = `
+      background-color: var(--card-bg);
+      border-radius: var(--border-radius);
+      box-shadow: var(--shadow-lg);
+      width: 100%;
+      max-width: 500px;
+      max-height: 90vh;
+      overflow-y: auto;
+      padding: 2rem;
+      position: relative;
+    `;
+    
+    // Add close button
+    const closeBtn = document.createElement('div');
+    closeBtn.className = 'modal-close';
+    closeBtn.innerHTML = '<i class="fas fa-times"></i>';
+    closeBtn.style.cssText = `
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      cursor: pointer;
+      font-size: 1.25rem;
+      color: var(--gray-500);
+    `;
+    closeBtn.addEventListener('click', () => {
+      modal.style.display = 'none';
+    });
+    
+    // Add content structure
+    content.innerHTML += `
+      <h3 class="modal-title" style="margin-bottom: 1.5rem;">Booking Details</h3>
+      
+      <div class="booking-details-content" style="margin-bottom: 2rem;">
+        <!-- Booking details will be inserted here -->
+      </div>
+      
+      <div class="modal-actions" style="display: flex; justify-content: space-between;">
+        <button id="closeBookingDetailsBtn" class="btn btn-outline">
+          <i class="fas fa-times"></i> Close
+        </button>
+        <button id="cancelBookingBtn" class="btn btn-danger">
+          <i class="fas fa-ban"></i> Cancel Booking
+        </button>
+      </div>
+    `;
+    
+    // Add everything to DOM
+    content.appendChild(closeBtn);
+    modal.appendChild(content);
+    document.body.appendChild(modal);
+    
+    // Add event listeners
+    content.querySelector('#closeBookingDetailsBtn').addEventListener('click', () => {
+      modal.style.display = 'none';
+    });
+    
+    content.querySelector('#cancelBookingBtn').addEventListener('click', () => {
+      this.confirmCancelBooking(modal.dataset.startDate, modal.dataset.endDate);
+      modal.style.display = 'none';
+    });
+    
+    // Store modal reference
+    this.bookingDetailsModal = modal;
+  },
+  
+  // Find the full date range for a booking
+  findBookingDateRange(dateStr, booking) {
+    // If booking has start/end dates stored, use those
+    if (booking.projectStartDate && booking.projectEndDate) {
+      return {
+        startDate: booking.projectStartDate,
+        endDate: booking.projectEndDate
+      };
+    }
+    
+    // Otherwise, search all booked dates to find the range with the same client+project
+    const clientId = booking.clientName + '|' + booking.projectName;
+    let startDate = dateStr;
+    let endDate = dateStr;
+    
+    // Search for the earliest date with this booking
+    Object.keys(this.bookedDates).forEach(date => {
+      const currentBooking = this.bookedDates[date];
+      const currentId = currentBooking.clientName + '|' + currentBooking.projectName;
+      
+      if (currentId === clientId) {
+        if (date < startDate) startDate = date;
+        if (date > endDate) endDate = date;
+      }
+    });
+    
+    return { startDate, endDate };
+  },
+  
+  // Confirm booking cancellation
+  confirmCancelBooking(startDate, endDate) {
+    // Format dates for user
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const formatOptions = { month: 'short', day: 'numeric', year: 'numeric' };
+    const startFormatted = start.toLocaleDateString('en-US', formatOptions);
+    const endFormatted = end.toLocaleDateString('en-US', formatOptions);
+    const dateRange = startFormatted === endFormatted ? 
+                      startFormatted : 
+                      `${startFormatted} to ${endFormatted}`;
+    
+    // Confirm with user
+    if (confirm(`Are you sure you want to cancel the booking for ${dateRange}?\n\nThis action cannot be undone.`)) {
+      this.cancelBooking(startDate, endDate);
+    }
+  },
+  
+  // Cancel a booking
+  cancelBooking(startDate, endDate) {
+    // Keep track of what we're about to cancel for display purposes
+    const firstDateStr = startDate;
+    const clientName = this.bookedDates[firstDateStr] ? 
+                      (this.bookedDates[firstDateStr].clientName || 'Unnamed Client') : 
+                      'Unknown Client';
+    const projectName = this.bookedDates[firstDateStr] ? 
+                       (this.bookedDates[firstDateStr].projectName || 'Unnamed Project') : 
+                       'Unknown Project';
+    
+    // Remove booking from each day in the range
+    let currentDate = new Date(startDate);
+    const endDateObj = new Date(endDate);
+    
+    let datesRemoved = 0;
+    
+    while (currentDate <= endDateObj) {
+      const dateStr = currentDate.toISOString().split('T')[0];
+      
+      if (this.bookedDates[dateStr]) {
+        delete this.bookedDates[dateStr];
+        datesRemoved++;
+      }
+      
+      // Move to next day
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+    
+    // Also check for any travel days attached to this booking
+    // This assumes travel days have same client/project info
+    
+    // Check for travel days before the start date
+    currentDate = new Date(startDate);
+    currentDate.setDate(currentDate.getDate() - 7); // Check up to a week before
+    while (currentDate < new Date(startDate)) {
+      const dateStr = currentDate.toISOString().split('T')[0];
+      
+      if (this.bookedDates[dateStr] && 
+          this.bookedDates[dateStr].isTravel && 
+          this.bookedDates[dateStr].clientName === clientName &&
+          this.bookedDates[dateStr].projectName === projectName) {
+        delete this.bookedDates[dateStr];
+        datesRemoved++;
+      }
+      
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+    
+    // Check for travel days after the end date
+    currentDate = new Date(endDate);
+    currentDate.setDate(currentDate.getDate() + 1);
+    const maxTravelDate = new Date(endDate);
+    maxTravelDate.setDate(maxTravelDate.getDate() + 7); // Check up to a week after
+    
+    while (currentDate <= maxTravelDate) {
+      const dateStr = currentDate.toISOString().split('T')[0];
+      
+      if (this.bookedDates[dateStr] && 
+          this.bookedDates[dateStr].isTravel && 
+          this.bookedDates[dateStr].clientName === clientName && 
+          this.bookedDates[dateStr].projectName === projectName) {
+        delete this.bookedDates[dateStr];
+        datesRemoved++;
+      }
+      
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+    
+    // Save updated availability
+    this.saveAvailability();
+    
+    // Refresh calendar display
+    this.renderCalendar();
+    this.renderUpcomingBookings();
+    
+    // Show success message
+    this.showCancellationSuccess(clientName, projectName, datesRemoved);
+  },
+  
+  // Show cancellation success message
+  showCancellationSuccess(clientName, projectName, datesRemoved) {
+    // Create alert element
+    const alert = document.createElement('div');
+    alert.className = 'alert alert-success cancellation-alert';
+    alert.style.cssText = `
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      max-width: 400px;
+      z-index: 1000;
+      animation: slideIn 0.3s ease-out;
+    `;
+    
+    alert.innerHTML = `
+      <i class="fas fa-check-circle"></i>
+      <div>
+        <strong>Booking Cancelled</strong>
+        <p>Successfully cancelled booking for ${clientName} - ${projectName}.</p>
+        <p>${datesRemoved} date${datesRemoved !== 1 ? 's' : ''} removed from calendar.</p>
+      </div>
+    `;
+    
+    // Add animation keyframes
+    const style = document.createElement('style');
+    style.textContent = `
+      @keyframes slideIn {
+        from { transform: translateX(100%); opacity: 0; }
+        to { transform: translateX(0); opacity: 1; }
+      }
+      @keyframes fadeOut {
+        from { opacity: 1; }
+        to { opacity: 0; }
+      }
+      .cancellation-alert {
+        box-shadow: var(--shadow-lg);
+      }
+    `;
+    document.head.appendChild(style);
+    
+    // Add to document
+    document.body.appendChild(alert);
+    
+    // Remove after delay
+    setTimeout(() => {
+      alert.style.animation = 'fadeOut 0.5s ease-out';
+      setTimeout(() => alert.remove(), 500);
+    }, 5000);
   },
   
   // Show block details modal
@@ -583,6 +910,13 @@ Would you like to unblock this date?
           </span>
         </div>
       `;
+      
+      // Add click handler to view booking details
+      bookingItem.addEventListener('click', () => {
+        // Find any date in this booking range to show details
+        const dateToShow = booking.startDate.toISOString().split('T')[0];
+        this.showBookingDetails(dateToShow);
+      });
       
       upcomingBookingsList.appendChild(bookingItem);
     });
