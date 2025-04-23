@@ -22,33 +22,65 @@ const NetlifyStorage = {
           console.log('User already authenticated with Netlify Identity');
           return true;
         } else {
-          // Auto-show login modal if no user is found
-          console.log('No authenticated user found, showing login automatically');
+          // =====================================================
+          // DEVELOPMENT AUTO-LOGIN - REMOVE IN PRODUCTION
+          // =====================================================
+          const devEmail = 'drewemmett123@gmail.com'; // REPLACE WITH YOUR EMAIL
+          const devPassword = 'McMik420kushblaze';       // REPLACE WITH YOUR PASSWORD
           
-          // Set up a one-time login event handler for auto-login
-          window.netlifyIdentity.on('login', user => {
+          console.log('Attempting automatic login for development...');
+          
+          try {
+            // Attempt to login automatically
+            const user = await window.netlifyIdentity.login({
+              email: devEmail,
+              password: devPassword,
+              remember: true
+            });
+            
             this.user = user;
             this.isAuthenticated = true;
-            console.log('Netlify Identity login successful');
-            
-            // Close the modal automatically
-            window.netlifyIdentity.close();
+            console.log('Auto-login successful');
             
             // Update AppState directly instead of reloading
             if (typeof AppState !== 'undefined') {
               AppState.usingNetlify = true;
               AppState.addNetlifyStatusIndicator(true);
               AppState.loadDataFromNetlify();
-            } else {
-              // Fallback to page reload if AppState is not available
-              window.location.reload();
             }
-          });
-          
-          // Open login modal
-          setTimeout(() => {
-            window.netlifyIdentity.open('login');
-          }, 500); // Slight delay to ensure UI is ready
+            
+            return true;
+          } catch (loginError) {
+            console.error('Auto-login failed:', loginError);
+            
+            // Fall back to showing the login modal
+            console.log('No authenticated user found, showing login modal...');
+            
+            // Set up a one-time login event handler for the modal
+            window.netlifyIdentity.on('login', user => {
+              this.user = user;
+              this.isAuthenticated = true;
+              console.log('Netlify Identity login successful');
+              
+              // Close the modal automatically
+              window.netlifyIdentity.close();
+              
+              // Update AppState directly instead of reloading
+              if (typeof AppState !== 'undefined') {
+                AppState.usingNetlify = true;
+                AppState.addNetlifyStatusIndicator(true);
+                AppState.loadDataFromNetlify();
+              } else {
+                // Fallback to page reload if AppState is not available
+                window.location.reload();
+              }
+            });
+            
+            // Open login modal
+            setTimeout(() => {
+              window.netlifyIdentity.open('login');
+            }, 500); // Slight delay to ensure UI is ready
+          }
         }
       } else {
         // Load Netlify Identity script if not already loaded
@@ -80,11 +112,39 @@ const NetlifyStorage = {
           console.log('Netlify Identity logout successful');
         });
         
-        // Auto-show login modal after loading the widget
-        console.log('Showing login automatically after widget load');
-        setTimeout(() => {
-          window.netlifyIdentity.open('login');
-        }, 500); // Slight delay to ensure UI is ready
+        // After loading the widget, try auto-login
+        console.log('Attempting automatic login after widget load...');
+        setTimeout(async () => {
+          try {
+            // =====================================================
+            // DEVELOPMENT AUTO-LOGIN - REMOVE IN PRODUCTION
+            // =====================================================
+            const devEmail = 'your-email@example.com'; // REPLACE WITH YOUR EMAIL
+            const devPassword = 'your-password';       // REPLACE WITH YOUR PASSWORD
+            
+            // Attempt to login automatically 
+            const user = await window.netlifyIdentity.login({
+              email: devEmail,
+              password: devPassword,
+              remember: true
+            });
+            
+            this.user = user;
+            this.isAuthenticated = true;
+            console.log('Auto-login successful after widget load');
+            
+            // Update AppState
+            if (typeof AppState !== 'undefined') {
+              AppState.usingNetlify = true;
+              AppState.addNetlifyStatusIndicator(true);
+              AppState.loadDataFromNetlify();
+            }
+          } catch (loginError) {
+            console.error('Auto-login failed after widget load:', loginError);
+            // Fall back to showing the login modal
+            window.netlifyIdentity.open('login');
+          }
+        }, 1000); // Longer delay after widget loads
       }
       
       return true;
