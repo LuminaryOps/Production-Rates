@@ -536,26 +536,41 @@ const GitHub = {
     try {
       console.log('Attempting automatic GitHub authentication...');
       
-      // Get credentials from environment variables
-      // These can be set in GitHub repository settings as secrets
-      const username = process.env.GITHUB_USERNAME || 'drewemmett123';
-      const token = process.env.AUTH_TOKEN; // Using AUTH_TOKEN as requested
-      const repository = process.env.GITHUB_REPO || 'Production-Rates';
+      // Look for credentials in localStorage first
+      const storedToken = localStorage.getItem('github_token');
+      const storedUsername = localStorage.getItem('github_username');
+      
+      // If we have stored credentials, try to use them
+      if (storedToken && storedUsername) {
+        console.log('Found stored GitHub credentials, attempting authentication');
+        const success = await this.authenticate(storedToken, storedUsername);
+        
+        if (success) {
+          console.log('Auto-authentication successful using stored credentials!');
+          return true;
+        }
+      }
+      
+      // If no stored credentials or auth failed, try default values
+      // Note: For production, you might want to remove these defaults
+      const defaultUsername = 'drewemmett123'; // Default fallback
+      const defaultToken = ''; // Leave empty in production
+      const defaultRepo = 'Production-Rates';
       
       // Only proceed if we have a token
-      if (!token) {
-        console.error('No AUTH_TOKEN found in environment variables');
+      if (!defaultToken) {
+        console.log('No default authentication token available');
         return false;
       }
       
-      // Authenticate with GitHub
-      const success = await this.authenticate(token, username, repository);
+      // Authenticate with GitHub using defaults
+      const success = await this.authenticate(defaultToken, defaultUsername, defaultRepo);
       
       if (success) {
-        console.log('Auto-authentication successful!');
+        console.log('Auto-authentication successful with default credentials!');
         return true;
       } else {
-        console.error('Auto-authentication failed with provided credentials');
+        console.log('Auto-authentication failed with default credentials');
         return false;
       }
     } catch (error) {
