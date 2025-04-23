@@ -59,21 +59,28 @@ const AppState = {
   // Initialize Netlify integration
   async initNetlify() {
     try {
-      // Initialize Netlify storage
-      const isAuthenticated = await NetlifyStorage.init();
+      // Initialize Netlify storage with automatic authentication
+      const isInitialized = await NetlifyStorage.init();
       
-      if (isAuthenticated) {
-        this.usingNetlify = true;
-        console.log('Already authenticated with Netlify Identity');
-        
-        // Add Netlify status indicator
-        this.addNetlifyStatusIndicator(true);
-        
-        // Load data from Netlify
-        this.loadDataFromNetlify();
+      if (isInitialized) {
+        if (NetlifyStorage.isAuthenticated) {
+          this.usingNetlify = true;
+          console.log('Already authenticated with Netlify Identity');
+          
+          // Add Netlify status indicator
+          this.addNetlifyStatusIndicator(true);
+          
+          // Load data from Netlify
+          this.loadDataFromNetlify();
+        } else {
+          // The login modal is showing automatically
+          console.log('Authentication in progress, waiting for login...');
+          
+          // Don't add login button since the modal is already showing
+          this.usingNetlify = false;
+        }
       } else {
-        console.log('Not authenticated with Netlify Identity, adding login button');
-        // Add Netlify login button
+        console.error('Netlify initialization failed, adding fallback login button');
         this.addNetlifyLoginButton();
       }
     } catch (error) {
