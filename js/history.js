@@ -124,31 +124,82 @@ const History = {
   },
   
   // Load history from repository
-  loadHistory() {
-    // For the demo we'll use localStorage to simulate repository storage
-    // In a production environment, you would use GitHub API or Firebase/Firestore
-    
+  async loadHistory() {
     try {
+      // Check if GitHub integration is enabled
+      if (AppState.usingGitHub && GitHub.checkAuth()) {
+        // Load from GitHub
+        const githubHistory = await GitHub.loadHistory();
+        if (githubHistory && githubHistory.length > 0) {
+          this.historyData = githubHistory;
+          console.log('History loaded from GitHub:', this.historyData.length, 'items');
+          return;
+        }
+      }
+      
+      // Fallback to localStorage if GitHub not available or empty
       const storedHistory = localStorage.getItem('quoteHistory');
       if (storedHistory) {
         this.historyData = JSON.parse(storedHistory);
-        console.log('History loaded:', this.historyData.length, 'items');
+        console.log('History loaded from localStorage:', this.historyData.length, 'items');
+        
+        // If GitHub is available, sync localStorage data to GitHub
+        if (AppState.usingGitHub && GitHub.checkAuth()) {
+          this.syncLocalToGitHub();
+        }
       }
     } catch (error) {
       console.error('Error loading history:', error);
+      
+      // Fallback to empty history
+      this.historyData = [];
     }
   },
   
-  // Save history to repository
-  saveHistory() {
-    // In production, you would save to GitHub or Firebase/Firestore
-    // For the demo, we'll use localStorage
+  // Sync localStorage history to GitHub
+  async syncLocalToGitHub() {
+    if (!AppState.usingGitHub || !GitHub.checkAuth() || this.historyData.length === 0) return;
     
     try {
+      console.log('Syncing history to GitHub...');
+      await GitHub.saveHistory(this.historyData);
+      console.log('History synced to GitHub successfully');
+    } catch (error) {
+      console.error('Error syncing history to GitHub:', error);
+    }
+  },
+  
+  // Save history
+  async saveHistory() {
+    try {
+      // Save to GitHub if available
+      if (AppState.usingGitHub && GitHub.checkAuth()) {
+        await GitHub.saveHistory(this.historyData);
+        console.log('History saved to GitHub');
+      }
+      
+      // Also save to localStorage as fallback
       localStorage.setItem('quoteHistory', JSON.stringify(this.historyData));
     } catch (error) {
       console.error('Error saving history:', error);
+      
+      // Fallback to localStorage
+      try {
+        localStorage.setItem('quoteHistory', JSON.stringify(this.historyData));
+        console.log('History saved to localStorage (GitHub failed)');
+      } catch (localError) {
+        console.error('Error saving to localStorage:', localError);
+      }
     }
+  },
+  
+  // Update history data from GitHub
+  updateHistoryData(newData) {
+    if (!newData || newData.length === 0) return;
+    
+    this.historyData = newData;
+    this.refreshHistoryDisplay();
+    console.log('History data updated from GitHub');
   },
   
   // Create a unique ID for history items
@@ -157,7 +208,7 @@ const History = {
   },
   
   // Save quote to history
-  saveQuote() {
+  async saveQuote() {
     // Get client and project info
     const clientName = document.getElementById('clientName').value.trim() || 'Unnamed Client';
     const projectName = document.getElementById('projectName').value.trim() || 'Unnamed Project';
@@ -178,13 +229,13 @@ const History = {
     this.historyData.unshift(quoteItem);
     
     // Save history
-    this.saveHistory();
+    await this.saveHistory();
     
     console.log('Quote saved to history:', quoteItem);
   },
   
   // Save invoice to history
-  saveInvoice() {
+  async saveInvoice() {
     // Get client and project info
     const clientName = document.getElementById('invoiceClient').textContent.trim() || 'Unnamed Client';
     const projectName = document.getElementById('invoiceProject').textContent.trim() || 'Unnamed Project';
@@ -209,7 +260,7 @@ const History = {
     this.historyData.unshift(invoiceItem);
     
     // Save history
-    this.saveHistory();
+    await this.saveHistory();
     
     console.log('Invoice saved to history:', invoiceItem);
   },
@@ -219,6 +270,13 @@ const History = {
     const historyList = document.getElementById('historyList');
     const searchTerm = document.getElementById('historySearch').value.toLowerCase();
     const filter = document.getElementById('historyFilter').value;
+    
+    // Check if GitHub authentication is required
+    if (AppState.usingGitHub && !GitHub.checkAuth()) {
+      historyList.innerHTML = '';
+      historyList.appendChild(GitHubAuth.showAuthRequired('GitHub Authentication Required for History'));
+      return;
+    }
     
     // Clear list
     historyList.innerHTML = '';
@@ -577,10 +635,10 @@ const History = {
   },
   
   // Delete history item
-  deleteHistoryItem(id) {
+  async deleteHistoryItem(id) {
     if (confirm('Are you sure you want to delete this item? This cannot be undone.')) {
       this.historyData = this.historyData.filter(item => item.id !== id);
-      this.saveHistory();
+      await this.saveHistory();
       this.refreshHistoryDisplay();
     }
   }
