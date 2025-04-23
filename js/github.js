@@ -531,16 +531,22 @@ const GitHub = {
     return true;
   },
   
-  // Automatic authentication with hardcoded credentials
+  // Automatic authentication with environment variables
   async autoAuthenticate() {
     try {
       console.log('Attempting automatic GitHub authentication...');
       
-      // NOTE: Using hardcoded credentials as requested
-      // GitHub credentials - application-specific account
-      const username = 'drewemmett123'; // GitHub username
-      const token = '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'; // Personal Access Token
-      const repository = 'Production-Rates';
+      // Get credentials from environment variables
+      // These can be set in GitHub repository settings as secrets
+      const username = process.env.GITHUB_USERNAME || 'drewemmett123';
+      const token = process.env.AUTH_TOKEN; // Using AUTH_TOKEN as requested
+      const repository = process.env.GITHUB_REPO || 'Production-Rates';
+      
+      // Only proceed if we have a token
+      if (!token) {
+        console.error('No AUTH_TOKEN found in environment variables');
+        return false;
+      }
       
       // Authenticate with GitHub
       const success = await this.authenticate(token, username, repository);
