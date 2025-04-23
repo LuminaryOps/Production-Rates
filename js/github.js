@@ -529,5 +529,32 @@ const GitHub = {
     
     console.log('Logged out of GitHub');
     return true;
+  },
+  
+  // Automatic authentication with hardcoded credentials
+  async autoAuthenticate() {
+    try {
+      console.log('Attempting automatic GitHub authentication...');
+      
+      // NOTE: Using hardcoded credentials as requested
+      // GitHub credentials - application-specific account
+      const username = 'drewemmett123'; // GitHub username
+      const token = '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'; // Personal Access Token
+      const repository = 'production-calculator-data';
+      
+      // Authenticate with GitHub
+      const success = await this.authenticate(token, username, repository);
+      
+      if (success) {
+        console.log('Auto-authentication successful!');
+        return true;
+      } else {
+        console.error('Auto-authentication failed with provided credentials');
+        return false;
+      }
+    } catch (error) {
+      console.error('Error during auto-authentication:', error);
+      return false;
+    }
   }
 };
