@@ -21,6 +21,34 @@ const NetlifyStorage = {
           this.isAuthenticated = true;
           console.log('User already authenticated with Netlify Identity');
           return true;
+        } else {
+          // Auto-show login modal if no user is found
+          console.log('No authenticated user found, showing login automatically');
+          
+          // Set up a one-time login event handler for auto-login
+          window.netlifyIdentity.on('login', user => {
+            this.user = user;
+            this.isAuthenticated = true;
+            console.log('Netlify Identity login successful');
+            
+            // Close the modal automatically
+            window.netlifyIdentity.close();
+            
+            // Update AppState directly instead of reloading
+            if (typeof AppState !== 'undefined') {
+              AppState.usingNetlify = true;
+              AppState.addNetlifyStatusIndicator(true);
+              AppState.loadDataFromNetlify();
+            } else {
+              // Fallback to page reload if AppState is not available
+              window.location.reload();
+            }
+          });
+          
+          // Open login modal
+          setTimeout(() => {
+            window.netlifyIdentity.open('login');
+          }, 500); // Slight delay to ensure UI is ready
         }
       } else {
         // Load Netlify Identity script if not already loaded
@@ -35,8 +63,15 @@ const NetlifyStorage = {
           // Close the modal automatically
           window.netlifyIdentity.close();
           
-          // Refresh the page to update the UI and data
-          window.location.reload();
+          // Update AppState directly instead of reloading
+          if (typeof AppState !== 'undefined') {
+            AppState.usingNetlify = true;
+            AppState.addNetlifyStatusIndicator(true);
+            AppState.loadDataFromNetlify();
+          } else {
+            // Fallback to page reload if AppState is not available
+            window.location.reload();
+          }
         });
         
         window.netlifyIdentity.on('logout', () => {
@@ -44,9 +79,15 @@ const NetlifyStorage = {
           this.isAuthenticated = false;
           console.log('Netlify Identity logout successful');
         });
+        
+        // Auto-show login modal after loading the widget
+        console.log('Showing login automatically after widget load');
+        setTimeout(() => {
+          window.netlifyIdentity.open('login');
+        }, 500); // Slight delay to ensure UI is ready
       }
       
-      return false;
+      return true;
     } catch (error) {
       console.error('Error initializing Netlify integration:', error);
       return false;
