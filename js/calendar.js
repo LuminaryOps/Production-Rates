@@ -23,12 +23,12 @@ const Calendar = {
     this.setupDateValidation();
   },
   
-  // Load availability data from Netlify
+  // Load availability data from Firebase
   async loadAvailability() {
     try {
-      // Try to load from Netlify if available
-      if (AppState.usingNetlify && NetlifyStorage.checkAuth()) {
-        const availability = await NetlifyStorage.loadCalendarData();
+      // Try to load from Firebase if available
+      if (AppState.usingFirebase) {
+        const availability = await FirebaseStorage.loadCalendarData();
         if (availability) {
           this.blockedDates = availability.blockedDates || {};
           this.bookedDates = availability.bookedDates || {};
@@ -39,12 +39,29 @@ const Calendar = {
             bookedDates: this.bookedDates
           };
           
-          console.log('Availability data loaded from Netlify');
+          console.log('Availability data loaded from Firebase');
           return;
         }
       }
       
-      // Initialize with empty data if nothing found or no connection
+      // Fallback to localStorage
+      const storedCalendar = localStorage.getItem('calendar');
+      if (storedCalendar) {
+        const parsed = JSON.parse(storedCalendar);
+        this.blockedDates = parsed.blockedDates || {};
+        this.bookedDates = parsed.bookedDates || {};
+        
+        // Update app state
+        AppState.availability = {
+          blockedDates: this.blockedDates,
+          bookedDates: this.bookedDates
+        };
+        
+        console.log('Availability data loaded from localStorage');
+        return;
+      }
+      
+      // Initialize with empty data if nothing found
       this.blockedDates = {};
       this.bookedDates = {};
       
@@ -64,20 +81,27 @@ const Calendar = {
     }
   },
   
-  // Save availability data to Netlify
+  // Save availability data to Firebase
   async saveAvailability() {
     try {
-      // Save to Netlify if available
-      if (AppState.usingNetlify && NetlifyStorage.checkAuth()) {
+      // Save to Firebase if available
+      if (AppState.usingFirebase) {
         const availability = {
           blockedDates: this.blockedDates,
           bookedDates: this.bookedDates
         };
         
-        await NetlifyStorage.saveCalendarData(availability);
-        console.log('Availability data saved to Netlify');
+        await FirebaseStorage.saveCalendarData(availability);
+        console.log('Availability data saved to Firebase');
       } else {
-        console.log('Netlify not available, calendar data not saved');
+        // Fallback to localStorage
+        const availability = {
+          blockedDates: this.blockedDates,
+          bookedDates: this.bookedDates
+        };
+        
+        localStorage.setItem('calendar', JSON.stringify(availability));
+        console.log('Availability data saved to localStorage');
       }
       
       // Update app state
@@ -89,10 +113,23 @@ const Calendar = {
       console.log('Availability data updated in app state');
     } catch (error) {
       console.error('Error saving availability data:', error);
+      
+      // Fallback to localStorage
+      try {
+        const availability = {
+          blockedDates: this.blockedDates,
+          bookedDates: this.bookedDates
+        };
+        
+        localStorage.setItem('calendar', JSON.stringify(availability));
+        console.log('Availability data saved to localStorage (fallback)');
+      } catch (localError) {
+        console.error('Error saving to localStorage:', localError);
+      }
     }
   },
   
-  // Update availability from Netlify
+  // Update availability from external source
   updateAvailability(availability) {
     if (!availability) return;
     
@@ -109,7 +146,7 @@ const Calendar = {
     this.renderCalendar();
     this.renderUpcomingBookings();
     
-    console.log('Calendar availability updated from Netlify');
+    console.log('Calendar availability updated from external source');
   },
   
   // Create calendar tab
@@ -139,14 +176,6 @@ const Calendar = {
         
         calendarTab.classList.add('active');
         document.getElementById('calendar').classList.add('active');
-        
-        // Check Netlify authentication if needed
-        if (AppState.usingNetlify && !NetlifyStorage.checkAuth()) {
-          const calendarContent = document.getElementById('calendar').querySelector('.card');
-          calendarContent.innerHTML = '';
-          calendarContent.appendChild(NetlifyAuth.showAuthRequired('Authentication Required for Calendar'));
-          return;
-        }
         
         // Refresh calendar when tab is shown
         this.renderCalendar();
