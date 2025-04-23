@@ -23,12 +23,12 @@ const Calendar = {
     this.setupDateValidation();
   },
   
-  // Load availability data from GitHub or localStorage
+  // Load availability data from Netlify
   async loadAvailability() {
     try {
-      // Try to load from GitHub first if available
-      if (AppState.usingGitHub && GitHub.checkAuth()) {
-        const availability = await GitHub.loadCalendarData();
+      // Try to load from Netlify if available
+      if (AppState.usingNetlify && NetlifyStorage.checkAuth()) {
+        const availability = await NetlifyStorage.loadCalendarData();
         if (availability) {
           this.blockedDates = availability.blockedDates || {};
           this.bookedDates = availability.bookedDates || {};
@@ -39,22 +39,14 @@ const Calendar = {
             bookedDates: this.bookedDates
           };
           
-          console.log('Availability data loaded from GitHub');
+          console.log('Availability data loaded from Netlify');
           return;
         }
       }
       
-      // Fallback to localStorage
-      const savedBlockedDates = localStorage.getItem('blockedDates');
-      const savedBookedDates = localStorage.getItem('bookedDates');
-      
-      if (savedBlockedDates) {
-        this.blockedDates = JSON.parse(savedBlockedDates);
-      }
-      
-      if (savedBookedDates) {
-        this.bookedDates = JSON.parse(savedBookedDates);
-      }
+      // Initialize with empty data if nothing found or no connection
+      this.blockedDates = {};
+      this.bookedDates = {};
       
       // Update app state
       AppState.availability = {
@@ -62,12 +54,7 @@ const Calendar = {
         bookedDates: this.bookedDates
       };
       
-      console.log('Availability data loaded from localStorage');
-      
-      // If GitHub is available, sync localStorage data to GitHub
-      if (AppState.usingGitHub && GitHub.checkAuth()) {
-        this.syncLocalToGitHub();
-      }
+      console.log('No availability data found, initialized with empty data');
     } catch (error) {
       console.error('Error loading availability data:', error);
       
@@ -77,42 +64,21 @@ const Calendar = {
     }
   },
   
-  // Sync localStorage calendar data to GitHub
-  async syncLocalToGitHub() {
-    if (!AppState.usingGitHub || !GitHub.checkAuth()) return;
-    
-    try {
-      console.log('Syncing calendar data to GitHub...');
-      
-      const availability = {
-        blockedDates: this.blockedDates,
-        bookedDates: this.bookedDates
-      };
-      
-      await GitHub.saveCalendarData(availability);
-      console.log('Calendar data synced to GitHub successfully');
-    } catch (error) {
-      console.error('Error syncing calendar data to GitHub:', error);
-    }
-  },
-  
-  // Save availability data to GitHub and localStorage
+  // Save availability data to Netlify
   async saveAvailability() {
     try {
-      // Save to GitHub if available
-      if (AppState.usingGitHub && GitHub.checkAuth()) {
+      // Save to Netlify if available
+      if (AppState.usingNetlify && NetlifyStorage.checkAuth()) {
         const availability = {
           blockedDates: this.blockedDates,
           bookedDates: this.bookedDates
         };
         
-        await GitHub.saveCalendarData(availability);
-        console.log('Availability data saved to GitHub');
+        await NetlifyStorage.saveCalendarData(availability);
+        console.log('Availability data saved to Netlify');
+      } else {
+        console.log('Netlify not available, calendar data not saved');
       }
-      
-      // Also save to localStorage as fallback
-      localStorage.setItem('blockedDates', JSON.stringify(this.blockedDates));
-      localStorage.setItem('bookedDates', JSON.stringify(this.bookedDates));
       
       // Update app state
       AppState.availability = {
@@ -120,29 +86,13 @@ const Calendar = {
         bookedDates: this.bookedDates
       };
       
-      console.log('Availability data saved');
+      console.log('Availability data updated in app state');
     } catch (error) {
       console.error('Error saving availability data:', error);
-      
-      // Fallback to localStorage
-      try {
-        localStorage.setItem('blockedDates', JSON.stringify(this.blockedDates));
-        localStorage.setItem('bookedDates', JSON.stringify(this.bookedDates));
-        
-        // Update app state
-        AppState.availability = {
-          blockedDates: this.blockedDates,
-          bookedDates: this.bookedDates
-        };
-        
-        console.log('Availability data saved to localStorage (GitHub failed)');
-      } catch (localError) {
-        console.error('Error saving to localStorage:', localError);
-      }
     }
   },
   
-  // Update availability from GitHub
+  // Update availability from Netlify
   updateAvailability(availability) {
     if (!availability) return;
     
@@ -159,7 +109,7 @@ const Calendar = {
     this.renderCalendar();
     this.renderUpcomingBookings();
     
-    console.log('Calendar availability updated from GitHub');
+    console.log('Calendar availability updated from Netlify');
   },
   
   // Create calendar tab
@@ -190,11 +140,11 @@ const Calendar = {
         calendarTab.classList.add('active');
         document.getElementById('calendar').classList.add('active');
         
-        // Check GitHub authentication if needed
-        if (AppState.usingGitHub && !GitHub.checkAuth()) {
+        // Check Netlify authentication if needed
+        if (AppState.usingNetlify && !NetlifyStorage.checkAuth()) {
           const calendarContent = document.getElementById('calendar').querySelector('.card');
           calendarContent.innerHTML = '';
-          calendarContent.appendChild(GitHubAuth.showAuthRequired('GitHub Authentication Required for Calendar'));
+          calendarContent.appendChild(NetlifyAuth.showAuthRequired('Authentication Required for Calendar'));
           return;
         }
         
