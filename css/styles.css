@@ -615,6 +615,66 @@ input[type="date"] {
   margin-bottom: 1.5rem;
 }
 
+/* Booking details modal styles */
+.booking-details-modal {
+  z-index: 1000;
+}
+
+.booking-detail-row {
+  display: flex;
+  margin-bottom: 0.75rem;
+}
+
+.booking-detail-label {
+  font-weight: 500;
+  color: var(--gray-600);
+  width: 100px;
+  flex-shrink: 0;
+}
+
+.booking-detail-value {
+  color: var(--gray-800);
+  flex-grow: 1;
+}
+
+/* Make upcoming bookings clickable */
+.booking-item {
+  cursor: pointer;
+}
+
+.booking-item:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--shadow-md);
+  transition: all 0.3s ease;
+}
+
+/* Danger button */
+.btn-danger {
+  background-color: var(--danger);
+  color: white;
+}
+
+.btn-danger:hover {
+  background-color: #d32f2f;
+  box-shadow: var(--shadow);
+}
+
+/* Animation for notification */
+@keyframes slideIn {
+  from { transform: translateX(100%); opacity: 0; }
+  to { transform: translateX(0); opacity: 1; }
+}
+
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+.cancellation-alert {
+  animation: slideIn 0.3s ease-out;
+  box-shadow: var(--shadow-lg);
+}
+
 /* Upcoming bookings list */
 #upcomingBookings {
   margin-top: 1rem;
