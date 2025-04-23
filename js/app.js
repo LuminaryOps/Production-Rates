@@ -53,24 +53,40 @@ const AppState = {
     }
   },
   
-  // Initialize GitHub integration
+  // Initialize GitHub integration with automatic authentication
   async initGitHub() {
     try {
       // Initialize GitHub module
       await GitHub.init();
       
-      // Initialize GitHub auth
+      // Initialize GitHub auth (for manual login if needed)
       GitHubAuth.init();
       
       // Check if already authenticated
       if (GitHub.checkAuth()) {
         this.usingGitHub = true;
-        console.log('GitHub integration enabled');
+        console.log('Already authenticated with GitHub');
         
         // Add GitHub status indicator
         this.addGitHubStatusIndicator(true);
+        return;
+      }
+      
+      // Try automatic authentication
+      const autoAuthSuccess = await GitHub.autoAuthenticate();
+      
+      if (autoAuthSuccess) {
+        this.usingGitHub = true;
+        console.log('Auto-authenticated with GitHub');
+        
+        // Add GitHub status indicator
+        this.addGitHubStatusIndicator(true);
+        
+        // Load data from GitHub
+        this.loadDataFromGitHub();
       } else {
-        // Add GitHub login button
+        console.warn('Auto-authentication failed, adding manual login button');
+        // Add GitHub login button for manual authentication
         this.addGitHubLoginButton();
       }
     } catch (error) {
