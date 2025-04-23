@@ -20,7 +20,7 @@ const GitHub = {
       // Use settings if provided, otherwise use stored values
       this.accessToken = settings.accessToken || storedToken;
       this.username = settings.username || storedUsername;
-      this.repository = settings.repository || storedRepo || 'production-calculator-data';
+      this.repository = settings.repository || storedRepo || 'Production-Rates';
       
       // Check if we have valid credentials
       if (this.accessToken && this.username) {
@@ -49,7 +49,7 @@ const GitHub = {
     try {
       this.accessToken = token;
       this.username = username;
-      this.repository = repository || 'production-calculator-data';
+      this.repository = repository || 'Production-Rates';
       
       // Verify token validity
       const isValid = await this.verifyToken();
@@ -539,8 +539,8 @@ const GitHub = {
       // NOTE: Using hardcoded credentials as requested
       // GitHub credentials - application-specific account
       const username = 'drewemmett123'; // GitHub username
-      const token = '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'; // Personal Access Token
-      const repository = 'production-calculator-data';
+      const token = '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'; // Personal Access Token
+      const repository = 'Production-Rates';
       
       // Authenticate with GitHub
       const success = await this.authenticate(token, username, repository);
