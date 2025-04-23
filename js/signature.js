@@ -363,7 +363,7 @@ const Signature = {
   },
   
   // Process the signature form
-  processSignature() {
+  async processSignature() {
     // Check if signature exists
     if (!this.hasSigned || this.isCanvasEmpty()) {
       alert('Please sign the document before proceeding.');
@@ -406,7 +406,7 @@ const Signature = {
     };
     
     // Save the signature data
-    this.saveSignature(signatureData);
+    await this.saveSignature(signatureData);
     
     // Book the project dates in the calendar
     if (AppState.selectedDates && Calendar) {
@@ -425,7 +425,7 @@ const Signature = {
           travelDays: parseInt(document.getElementById('travelDays').value) || 0
         };
         
-        Calendar.bookDateRange(startDate, endDate, clientData);
+        await Calendar.bookDateRange(startDate, endDate, clientData);
         
         console.log('Project dates booked in calendar:', startDate, 'to', endDate);
       } else {
@@ -444,14 +444,16 @@ const Signature = {
   },
   
   // Save signature data
-  saveSignature(signatureData) {
-    // In a production environment, this would send the data to a server or store in a database
-    
-    // For this demo, we'll just store in the AppState
-    AppState.signatureData = signatureData;
-    
-    // Store in local storage for persistence
+  async saveSignature(signatureData) {
     try {
+      // Save to GitHub if available
+      if (AppState.usingGitHub && GitHub.checkAuth()) {
+        await GitHub.saveSignatureData(signatureData);
+        console.log('Signature data saved to GitHub');
+        return true;
+      }
+      
+      // Fallback to localStorage
       const signatureHistory = JSON.parse(localStorage.getItem('signatureHistory') || '[]');
       signatureHistory.unshift({
         id: Date.now(),
@@ -468,11 +470,38 @@ const Signature = {
       }
       
       localStorage.setItem('signatureHistory', JSON.stringify(signatureHistory));
+      console.log('Signature data saved to localStorage');
+      
+      return true;
     } catch (error) {
-      console.error('Error saving signature history:', error);
+      console.error('Error saving signature data:', error);
+      
+      // Try localStorage as fallback
+      try {
+        const signatureHistory = JSON.parse(localStorage.getItem('signatureHistory') || '[]');
+        signatureHistory.unshift({
+          id: Date.now(),
+          date: new Date().toISOString(),
+          clientName: signatureData.name,
+          projectName: signatureData.quoteData.project.name || 'Unnamed Project',
+          amount: signatureData.quoteData.total,
+          signatureData
+        });
+        
+        // Keep only the last 50 signatures
+        if (signatureHistory.length > 50) {
+          signatureHistory.length = 50;
+        }
+        
+        localStorage.setItem('signatureHistory', JSON.stringify(signatureHistory));
+        console.log('Signature data saved to localStorage (fallback)');
+        
+        return true;
+      } catch (localError) {
+        console.error('Error saving signature to localStorage:', localError);
+        return false;
+      }
     }
-    
-    console.log('Signature data saved:', signatureData);
   },
   
   // Send acceptance emails to client and business owner
