@@ -123,18 +123,26 @@ const History = {
     });
   },
   
-  // Load history from Netlify or initialize empty
+  // Load history from Firebase or localStorage
   async loadHistory() {
     try {
-      // Check if Netlify integration is enabled
-      if (AppState.usingNetlify && NetlifyStorage.checkAuth()) {
-        // Load from Netlify
-        const netlifyHistory = await NetlifyStorage.loadHistory();
-        if (netlifyHistory && netlifyHistory.length > 0) {
-          this.historyData = netlifyHistory;
-          console.log('History loaded from Netlify:', this.historyData.length, 'items');
+      // Check if Firebase integration is enabled
+      if (AppState.usingFirebase) {
+        // Load from Firebase
+        const firebaseHistory = await FirebaseStorage.loadHistory();
+        if (firebaseHistory && firebaseHistory.length > 0) {
+          this.historyData = firebaseHistory;
+          console.log('History loaded from Firebase:', this.historyData.length, 'items');
           return;
         }
+      }
+      
+      // Fallback to localStorage
+      const storedHistory = localStorage.getItem('history');
+      if (storedHistory) {
+        this.historyData = JSON.parse(storedHistory);
+        console.log('History loaded from localStorage:', this.historyData.length, 'items');
+        return;
       }
       
       // Initialize with empty history if nothing found
@@ -152,25 +160,35 @@ const History = {
   // Save history
   async saveHistory() {
     try {
-      // Save to Netlify if available
-      if (AppState.usingNetlify && NetlifyStorage.checkAuth()) {
-        await NetlifyStorage.saveHistory(this.historyData);
-        console.log('History saved to Netlify');
+      // Save to Firebase if available
+      if (AppState.usingFirebase) {
+        await FirebaseStorage.saveHistory(this.historyData);
+        console.log('History saved to Firebase');
       } else {
-        console.log('Netlify storage not available, history not saved');
+        // Fallback to localStorage
+        localStorage.setItem('history', JSON.stringify(this.historyData));
+        console.log('History saved to localStorage');
       }
     } catch (error) {
       console.error('Error saving history:', error);
+      
+      // Fallback to localStorage
+      try {
+        localStorage.setItem('history', JSON.stringify(this.historyData));
+        console.log('History saved to localStorage (fallback)');
+      } catch (localError) {
+        console.error('Error saving to localStorage:', localError);
+      }
     }
   },
   
-  // Update history data from Netlify
+  // Update history data from external source
   updateHistoryData(newData) {
     if (!newData || newData.length === 0) return;
     
     this.historyData = newData;
     this.refreshHistoryDisplay();
-    console.log('History data updated from Netlify');
+    console.log('History data updated from external source');
   },
   
   // Create a unique ID for history items
@@ -241,13 +259,6 @@ const History = {
     const historyList = document.getElementById('historyList');
     const searchTerm = document.getElementById('historySearch').value.toLowerCase();
     const filter = document.getElementById('historyFilter').value;
-    
-    // Check if Netlify authentication is required
-    if (AppState.usingNetlify && !NetlifyStorage.checkAuth()) {
-      historyList.innerHTML = '';
-      historyList.appendChild(NetlifyAuth.showAuthRequired('Authentication Required for History'));
-      return;
-    }
     
     // Clear list
     historyList.innerHTML = '';
