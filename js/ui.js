@@ -67,7 +67,7 @@ const UI = {
   init() {
     this.setupEventListeners();
     this.initTabs();
-    this.initDarkMode();
+    this.initTheme();
     this.refreshSpecialtyList();
   },
   
@@ -149,30 +149,73 @@ const UI = {
     });
   },
   
-  // Initialize dark mode
-  initDarkMode() {
+  // Initialize theme based on stored preferences
+  async initTheme() {
     this.elements.darkModeToggle.addEventListener('click', this.toggleTheme.bind(this));
     
-    // Set initial theme based on localStorage
-    if (localStorage.getItem('theme') === 'light') {
+    try {
+      // Try to get theme from GitHub first if available
+      if (AppState.usingGitHub && GitHub.checkAuth()) {
+        const preferences = await GitHub.loadPreferences();
+        if (preferences && preferences.theme) {
+          this.applyTheme(preferences.theme);
+          return;
+        }
+      }
+      
+      // Fallback to localStorage
+      const storedTheme = localStorage.getItem('theme');
+      if (storedTheme) {
+        this.applyTheme(storedTheme);
+      } else {
+        // Default to dark theme
+        this.applyTheme('dark');
+      }
+    } catch (error) {
+      console.error('Error loading theme preferences:', error);
+      // Default to dark theme
+      this.applyTheme('dark');
+    }
+  },
+  
+  // Apply theme preferences
+  applyPreferences(preferences) {
+    if (preferences && preferences.theme) {
+      this.applyTheme(preferences.theme);
+    }
+  },
+  
+  // Apply specific theme
+  applyTheme(theme) {
+    if (theme === 'light') {
       document.body.classList.add('light-mode');
       this.elements.darkModeToggle.innerHTML = '<i class="fas fa-moon"></i>';
     } else {
+      document.body.classList.remove('light-mode');
       this.elements.darkModeToggle.innerHTML = '<i class="fas fa-sun"></i>';
-      localStorage.setItem('theme', 'dark');
     }
   },
   
   // Toggle light/dark theme
-  toggleTheme() {
-    if (document.body.classList.contains('light-mode')) {
-      document.body.classList.remove('light-mode');
-      this.elements.darkModeToggle.innerHTML = '<i class="fas fa-sun"></i>';
-      localStorage.setItem('theme', 'dark');
+  async toggleTheme() {
+    const currentTheme = document.body.classList.contains('light-mode') ? 'light' : 'dark';
+    const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+    
+    this.applyTheme(newTheme);
+    
+    // Save preference to GitHub if available
+    if (AppState.usingGitHub && GitHub.checkAuth()) {
+      try {
+        await GitHub.savePreferences({ theme: newTheme });
+        console.log('Theme preference saved to GitHub');
+      } catch (error) {
+        console.error('Error saving theme preference to GitHub:', error);
+        // Fallback to localStorage
+        localStorage.setItem('theme', newTheme);
+      }
     } else {
-      document.body.classList.add('light-mode');
-      this.elements.darkModeToggle.innerHTML = '<i class="fas fa-moon"></i>';
-      localStorage.setItem('theme', 'light');
+      // Save to localStorage
+      localStorage.setItem('theme', newTheme);
     }
   },
   
