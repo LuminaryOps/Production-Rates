@@ -446,10 +446,10 @@ const Signature = {
   // Save signature data
   async saveSignature(signatureData) {
     try {
-      // Save to GitHub if available
-      if (AppState.usingGitHub && GitHub.checkAuth()) {
-        await GitHub.saveSignatureData(signatureData);
-        console.log('Signature data saved to GitHub');
+      // Save to Firebase if available
+      if (AppState.usingFirebase) {
+        await FirebaseStorage.saveSignatureData(signatureData);
+        console.log('Signature data saved to Firebase');
         return true;
       }
       
