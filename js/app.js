@@ -1,6 +1,6 @@
 /**
  * Main Application Controller
- * Emmett's Production Rate Calculator
+ * LuminaryOps Production Rate Calculator
  */
 
 // Global app state
@@ -18,7 +18,7 @@ const AppState = {
     bookedDates: {},
     blockedDates: {}
   },
-  usingGitHub: false,
+  usingNetlify: false,
   
   // Initialize the application
   async init() {
@@ -30,8 +30,11 @@ const AppState = {
       }
       this.rates = await response.json();
       
-      // Initialize GitHub integration
-      this.initGitHub();
+      // Update business name in rates (in case it hasn't been updated in the file)
+      this.rates.businessInfo.name = "LuminaryOps Technical Production";
+      
+      // Initialize Netlify integration
+      this.initNetlify();
       
       // Initialize modules
       UI.init();
@@ -53,55 +56,39 @@ const AppState = {
     }
   },
   
-  // Initialize GitHub integration with automatic authentication
-  async initGitHub() {
+  // Initialize Netlify integration
+  async initNetlify() {
     try {
-      // Initialize GitHub module
-      await GitHub.init();
+      // Initialize Netlify storage
+      const isAuthenticated = await NetlifyStorage.init();
       
-      // Initialize GitHub auth (for manual login if needed)
-      GitHubAuth.init();
-      
-      // Check if already authenticated
-      if (GitHub.checkAuth()) {
-        this.usingGitHub = true;
-        console.log('Already authenticated with GitHub');
+      if (isAuthenticated) {
+        this.usingNetlify = true;
+        console.log('Already authenticated with Netlify Identity');
         
-        // Add GitHub status indicator
-        this.addGitHubStatusIndicator(true);
-        return;
-      }
-      
-      // Try automatic authentication
-      const autoAuthSuccess = await GitHub.autoAuthenticate();
-      
-      if (autoAuthSuccess) {
-        this.usingGitHub = true;
-        console.log('Auto-authenticated with GitHub');
+        // Add Netlify status indicator
+        this.addNetlifyStatusIndicator(true);
         
-        // Add GitHub status indicator
-        this.addGitHubStatusIndicator(true);
-        
-        // Load data from GitHub
-        this.loadDataFromGitHub();
+        // Load data from Netlify
+        this.loadDataFromNetlify();
       } else {
-        console.warn('Auto-authentication failed, adding manual login button');
-        // Add GitHub login button for manual authentication
-        this.addGitHubLoginButton();
+        console.log('Not authenticated with Netlify Identity, adding login button');
+        // Add Netlify login button
+        this.addNetlifyLoginButton();
       }
     } catch (error) {
-      console.error('GitHub initialization failed:', error);
+      console.error('Netlify initialization failed:', error);
       
-      // Add GitHub login button
-      this.addGitHubLoginButton();
+      // Add Netlify login button as fallback
+      this.addNetlifyLoginButton();
     }
   },
   
-  // Add GitHub status indicator to the UI
-  addGitHubStatusIndicator(isConnected) {
+  // Add Netlify status indicator to the UI
+  addNetlifyStatusIndicator(isConnected) {
     // Create status indicator
     const indicator = document.createElement('div');
-    indicator.className = 'github-status-indicator';
+    indicator.className = 'netlify-status-indicator';
     indicator.style.cssText = `
       position: fixed;
       top: 20px;
@@ -119,37 +106,37 @@ const AppState = {
     `;
     
     indicator.innerHTML = `
-      <i class="fab fa-github" style="margin-right: 0.5rem;"></i>
-      ${isConnected ? 'Connected to GitHub' : 'GitHub Disconnected'}
+      <i class="fas fa-cloud" style="margin-right: 0.5rem;"></i>
+      ${isConnected ? 'Connected to Cloud' : 'Not Connected'}
     `;
     
     // Add click handler to toggle login/logout
     indicator.addEventListener('click', () => {
       if (isConnected) {
         // Show logout confirmation
-        if (confirm('Disconnect from GitHub? Your data will no longer be synchronized.')) {
-          GitHub.logout();
-          this.usingGitHub = false;
+        if (confirm('Disconnect from cloud storage? Your data will no longer be synchronized.')) {
+          NetlifyStorage.logout();
+          this.usingNetlify = false;
           
           // Update indicator
-          this.addGitHubStatusIndicator(false);
+          this.addNetlifyStatusIndicator(false);
         }
       } else {
         // Show login modal
-        GitHubAuth.showAuthModal(() => {
-          this.usingGitHub = true;
+        NetlifyStorage.showLoginModal(() => {
+          this.usingNetlify = true;
           
           // Update indicator
-          this.addGitHubStatusIndicator(true);
+          this.addNetlifyStatusIndicator(true);
           
-          // Load data from GitHub
-          this.loadDataFromGitHub();
+          // Load data from Netlify
+          this.loadDataFromNetlify();
         });
       }
     });
     
     // Remove existing indicator if any
-    const existingIndicator = document.querySelector('.github-status-indicator');
+    const existingIndicator = document.querySelector('.netlify-status-indicator');
     if (existingIndicator) {
       existingIndicator.remove();
     }
@@ -158,11 +145,11 @@ const AppState = {
     document.body.appendChild(indicator);
   },
   
-  // Add GitHub login button
-  addGitHubLoginButton() {
+  // Add Netlify login button
+  addNetlifyLoginButton() {
     // Create button
     const button = document.createElement('div');
-    button.className = 'github-login-button';
+    button.className = 'netlify-login-button';
     button.style.cssText = `
       position: fixed;
       top: 20px;
@@ -181,8 +168,8 @@ const AppState = {
     `;
     
     button.innerHTML = `
-      <i class="fab fa-github" style="margin-right: 0.5rem;"></i>
-      Login with GitHub
+      <i class="fas fa-cloud" style="margin-right: 0.5rem;"></i>
+      Enable Cloud Storage
     `;
     
     // Add hover effect
@@ -196,19 +183,19 @@ const AppState = {
     
     // Add click handler
     button.addEventListener('click', () => {
-      GitHubAuth.showAuthModal(() => {
-        this.usingGitHub = true;
+      NetlifyStorage.showLoginModal(() => {
+        this.usingNetlify = true;
         
         // Update UI with connected status
-        this.addGitHubStatusIndicator(true);
+        this.addNetlifyStatusIndicator(true);
         
-        // Load data from GitHub
-        this.loadDataFromGitHub();
+        // Load data from Netlify
+        this.loadDataFromNetlify();
       });
     });
     
     // Remove existing button if any
-    const existingButton = document.querySelector('.github-login-button');
+    const existingButton = document.querySelector('.netlify-login-button');
     if (existingButton) {
       existingButton.remove();
     }
@@ -217,32 +204,32 @@ const AppState = {
     document.body.appendChild(button);
   },
   
-  // Load all data from GitHub
-  async loadDataFromGitHub() {
-    if (!this.usingGitHub) return;
+  // Load all data from Netlify
+  async loadDataFromNetlify() {
+    if (!this.usingNetlify) return;
     
     try {
       // Load history data
-      const historyData = await GitHub.loadHistory();
+      const historyData = await NetlifyStorage.loadHistory();
       if (historyData && historyData.length > 0) {
         History.updateHistoryData(historyData);
       }
       
       // Load calendar data
-      const calendarData = await GitHub.loadCalendarData();
+      const calendarData = await NetlifyStorage.loadCalendarData();
       if (calendarData) {
         Calendar.updateAvailability(calendarData);
       }
       
       // Load theme preferences
-      const preferences = await GitHub.loadPreferences();
+      const preferences = await NetlifyStorage.loadPreferences();
       if (preferences) {
         UI.applyPreferences(preferences);
       }
       
-      console.log('Data loaded from GitHub successfully');
+      console.log('Data loaded from Netlify successfully');
     } catch (error) {
-      console.error('Error loading data from GitHub:', error);
+      console.error('Error loading data from Netlify:', error);
     }
   },
   
