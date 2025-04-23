@@ -23,9 +23,28 @@ const Calendar = {
     this.setupDateValidation();
   },
   
-  // Load availability data from local storage
-  loadAvailability() {
+  // Load availability data from GitHub or localStorage
+  async loadAvailability() {
     try {
+      // Try to load from GitHub first if available
+      if (AppState.usingGitHub && GitHub.checkAuth()) {
+        const availability = await GitHub.loadCalendarData();
+        if (availability) {
+          this.blockedDates = availability.blockedDates || {};
+          this.bookedDates = availability.bookedDates || {};
+          
+          // Update app state
+          AppState.availability = {
+            blockedDates: this.blockedDates,
+            bookedDates: this.bookedDates
+          };
+          
+          console.log('Availability data loaded from GitHub');
+          return;
+        }
+      }
+      
+      // Fallback to localStorage
       const savedBlockedDates = localStorage.getItem('blockedDates');
       const savedBookedDates = localStorage.getItem('bookedDates');
       
@@ -43,15 +62,55 @@ const Calendar = {
         bookedDates: this.bookedDates
       };
       
-      console.log('Availability data loaded');
+      console.log('Availability data loaded from localStorage');
+      
+      // If GitHub is available, sync localStorage data to GitHub
+      if (AppState.usingGitHub && GitHub.checkAuth()) {
+        this.syncLocalToGitHub();
+      }
     } catch (error) {
       console.error('Error loading availability data:', error);
+      
+      // Initialize with empty data
+      this.blockedDates = {};
+      this.bookedDates = {};
     }
   },
   
-  // Save availability data to local storage
-  saveAvailability() {
+  // Sync localStorage calendar data to GitHub
+  async syncLocalToGitHub() {
+    if (!AppState.usingGitHub || !GitHub.checkAuth()) return;
+    
     try {
+      console.log('Syncing calendar data to GitHub...');
+      
+      const availability = {
+        blockedDates: this.blockedDates,
+        bookedDates: this.bookedDates
+      };
+      
+      await GitHub.saveCalendarData(availability);
+      console.log('Calendar data synced to GitHub successfully');
+    } catch (error) {
+      console.error('Error syncing calendar data to GitHub:', error);
+    }
+  },
+  
+  // Save availability data to GitHub and localStorage
+  async saveAvailability() {
+    try {
+      // Save to GitHub if available
+      if (AppState.usingGitHub && GitHub.checkAuth()) {
+        const availability = {
+          blockedDates: this.blockedDates,
+          bookedDates: this.bookedDates
+        };
+        
+        await GitHub.saveCalendarData(availability);
+        console.log('Availability data saved to GitHub');
+      }
+      
+      // Also save to localStorage as fallback
       localStorage.setItem('blockedDates', JSON.stringify(this.blockedDates));
       localStorage.setItem('bookedDates', JSON.stringify(this.bookedDates));
       
@@ -64,7 +123,43 @@ const Calendar = {
       console.log('Availability data saved');
     } catch (error) {
       console.error('Error saving availability data:', error);
+      
+      // Fallback to localStorage
+      try {
+        localStorage.setItem('blockedDates', JSON.stringify(this.blockedDates));
+        localStorage.setItem('bookedDates', JSON.stringify(this.bookedDates));
+        
+        // Update app state
+        AppState.availability = {
+          blockedDates: this.blockedDates,
+          bookedDates: this.bookedDates
+        };
+        
+        console.log('Availability data saved to localStorage (GitHub failed)');
+      } catch (localError) {
+        console.error('Error saving to localStorage:', localError);
+      }
     }
+  },
+  
+  // Update availability from GitHub
+  updateAvailability(availability) {
+    if (!availability) return;
+    
+    this.blockedDates = availability.blockedDates || {};
+    this.bookedDates = availability.bookedDates || {};
+    
+    // Update app state
+    AppState.availability = {
+      blockedDates: this.blockedDates,
+      bookedDates: this.bookedDates
+    };
+    
+    // Refresh display
+    this.renderCalendar();
+    this.renderUpcomingBookings();
+    
+    console.log('Calendar availability updated from GitHub');
   },
   
   // Create calendar tab
@@ -94,6 +189,14 @@ const Calendar = {
         
         calendarTab.classList.add('active');
         document.getElementById('calendar').classList.add('active');
+        
+        // Check GitHub authentication if needed
+        if (AppState.usingGitHub && !GitHub.checkAuth()) {
+          const calendarContent = document.getElementById('calendar').querySelector('.card');
+          calendarContent.innerHTML = '';
+          calendarContent.appendChild(GitHubAuth.showAuthRequired('GitHub Authentication Required for Calendar'));
+          return;
+        }
         
         // Refresh calendar when tab is shown
         this.renderCalendar();
@@ -535,7 +638,7 @@ const Calendar = {
   },
   
   // Cancel a booking
-  cancelBooking(startDate, endDate) {
+  async cancelBooking(startDate, endDate) {
     // Keep track of what we're about to cancel for display purposes
     const firstDateStr = startDate;
     const clientName = this.bookedDates[firstDateStr] ? 
@@ -604,7 +707,7 @@ const Calendar = {
     }
     
     // Save updated availability
-    this.saveAvailability();
+    await this.saveAvailability();
     
     // Refresh calendar display
     this.renderCalendar();
@@ -819,7 +922,7 @@ Would you like to unblock this date?
   },
   
   // Block a range of dates
-  blockDateRange(startDate, endDate, reason = '') {
+  async blockDateRange(startDate, endDate, reason = '') {
     // Clone date to avoid modifying the original
     let currentDate = new Date(startDate);
     
@@ -833,7 +936,7 @@ Would you like to unblock this date?
       currentDate.setDate(currentDate.getDate() + 1);
     }
     
-    this.saveAvailability();
+    await this.saveAvailability();
     this.renderCalendar();
     
     alert(`Dates blocked successfully from ${startDate.toLocaleDateString()} to ${endDate.toLocaleDateString()}`);
@@ -930,7 +1033,7 @@ Would you like to unblock this date?
   },
   
   // Book a date range for a client
-  bookDateRange(startDate, endDate, clientData) {
+  async bookDateRange(startDate, endDate, clientData) {
     // Clone date to avoid modifying the original
     let currentDate = new Date(startDate);
     
@@ -948,7 +1051,7 @@ Would you like to unblock this date?
       currentDate.setDate(currentDate.getDate() + 1);
     }
     
-    this.saveAvailability();
+    await this.saveAvailability();
     
     // Add travel days if needed
     if (clientData.travelDays && clientData.travelDays > 0) {
@@ -984,7 +1087,7 @@ Would you like to unblock this date?
         afterTravel.setDate(afterTravel.getDate() + 1);
       }
       
-      this.saveAvailability();
+      await this.saveAvailability();
     }
   }
 };
