@@ -134,6 +134,8 @@ const Calendar = {
     // Store the event ID and original date
     this.draggedEventId = element.dataset.eventId;
     this.draggedEventOriginalDate = element.dataset.originalDate;
+    
+    console.log(`Drag started - Event ID: ${this.draggedEventId}, Original date: ${this.draggedEventOriginalDate}`);
   },
   
   handleDragMove(event) {
@@ -231,9 +233,11 @@ const Calendar = {
         const targetDate = new Date(currentYear, currentMonth, parseInt(dayNumber));
         targetDateStr = targetDate.toISOString().split('T')[0];
       }
+      console.log(`Drop target: calendar day, date: ${targetDateStr}`);
     } else if (event.target.classList.contains('day-column')) {
       // Get date from day column in week view
       targetDateStr = event.target.dataset.date;
+      console.log(`Drop target: day column, date: ${targetDateStr}`);
       
       // Get hour from position
       const rect = event.target.getBoundingClientRect();
@@ -248,6 +252,7 @@ const Calendar = {
       
       if (parent && parent.dataset.date) {
         targetDateStr = parent.dataset.date;
+        console.log(`Drop target: hour cell, date: ${targetDateStr}`);
         
         // Find hour from the hour cell
         const hourCells = Array.from(parent.querySelectorAll('.hour-cell'));
@@ -261,9 +266,21 @@ const Calendar = {
       }
     }
     
-    // Move the event if we have valid target info
-    if (targetDateStr && this.draggedEventId && this.draggedEventOriginalDate) {
+    // Debug logging
+    console.log(`Drag info - Event ID: ${this.draggedEventId}, Original date: ${this.draggedEventOriginalDate}, Target date: ${targetDateStr}`);
+    
+    // Move the event if we have valid target info and the target is different from the source
+    if (targetDateStr && this.draggedEventId && this.draggedEventOriginalDate && 
+        targetDateStr !== this.draggedEventOriginalDate) {
       this.moveEvent(this.draggedEventId, this.draggedEventOriginalDate, targetDateStr, targetHour);
+    } else if (targetDateStr && this.draggedEventId && this.draggedEventOriginalDate &&
+              targetDateStr === this.draggedEventOriginalDate) {
+      console.log("Target date is the same as original date, not moving event");
+    } else {
+      console.log("Missing information for move: ", 
+                 { targetDate: targetDateStr, 
+                   eventId: this.draggedEventId, 
+                   originalDate: this.draggedEventOriginalDate });
     }
     
     // Reset dragged event tracking
