@@ -7,12 +7,12 @@ const History = {
   historyData: [],
   
   // Initialize history module
-  init() {
+  async init() {
     // Create history tab and content
     this.createHistoryTab();
     
-    // Load existing history
-    this.loadHistory();
+    // Load existing history - now properly awaiting the async operation
+    await this.loadHistory();
     
     // Add save handlers to quotes and invoices
     this.setupSaveHandlers();
@@ -132,6 +132,8 @@ const History = {
         const firebaseHistory = await FirebaseStorage.loadHistory();
         if (firebaseHistory && firebaseHistory.length > 0) {
           this.historyData = firebaseHistory;
+          // Update AppState to match Calendar's pattern
+          AppState.historyData = this.historyData;
           console.log('History loaded from Firebase:', this.historyData.length, 'items');
           return;
         }
@@ -141,19 +143,23 @@ const History = {
       const storedHistory = localStorage.getItem('history');
       if (storedHistory) {
         this.historyData = JSON.parse(storedHistory);
+        // Update AppState to match Calendar's pattern
+        AppState.historyData = this.historyData;
         console.log('History loaded from localStorage:', this.historyData.length, 'items');
         return;
       }
       
       // Initialize with empty history if nothing found
       this.historyData = [];
+      AppState.historyData = [];
       console.log('No history data found, initialized with empty array');
       
     } catch (error) {
-      console.error('Error loading history:', error);
+      console.error('Error loading history data:', error);
       
       // Fallback to empty history
       this.historyData = [];
+      AppState.historyData = [];
     }
   },
   
@@ -163,10 +169,14 @@ const History = {
       // Save to Firebase if available
       if (AppState.usingFirebase) {
         await FirebaseStorage.saveHistory(this.historyData);
+        // Update AppState
+        AppState.historyData = this.historyData;
         console.log('History saved to Firebase');
       } else {
         // Fallback to localStorage
         localStorage.setItem('history', JSON.stringify(this.historyData));
+        // Update AppState
+        AppState.historyData = this.historyData;
         console.log('History saved to localStorage');
       }
     } catch (error) {
@@ -175,6 +185,8 @@ const History = {
       // Fallback to localStorage
       try {
         localStorage.setItem('history', JSON.stringify(this.historyData));
+        // Update AppState
+        AppState.historyData = this.historyData;
         console.log('History saved to localStorage (fallback)');
       } catch (localError) {
         console.error('Error saving to localStorage:', localError);
@@ -187,6 +199,8 @@ const History = {
     if (!newData || newData.length === 0) return;
     
     this.historyData = newData;
+    // Update AppState
+    AppState.historyData = this.historyData;
     this.refreshHistoryDisplay();
     console.log('History data updated from external source');
   },
@@ -257,8 +271,10 @@ const History = {
   // Refresh history display
   refreshHistoryDisplay() {
     const historyList = document.getElementById('historyList');
-    const searchTerm = document.getElementById('historySearch').value.toLowerCase();
-    const filter = document.getElementById('historyFilter').value;
+    if (!historyList) return; // Safety check in case element isn't ready
+    
+    const searchTerm = document.getElementById('historySearch')?.value?.toLowerCase() || '';
+    const filter = document.getElementById('historyFilter')?.value || 'all';
     
     // Clear list
     historyList.innerHTML = '';
@@ -271,8 +287,8 @@ const History = {
       
       // Apply search
       if (searchTerm) {
-        const clientMatch = item.client.toLowerCase().includes(searchTerm);
-        const projectMatch = item.project.toLowerCase().includes(searchTerm);
+        const clientMatch = (item.client || '').toLowerCase().includes(searchTerm);
+        const projectMatch = (item.project || '').toLowerCase().includes(searchTerm);
         return clientMatch || projectMatch;
       }
       
