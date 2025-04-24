@@ -1,4 +1,54 @@
-// Set up drag and drop interactions for calendar events
+/**
+ * Enhanced Calendar Module
+ * Handles modern calendar functionality with time-based scheduling, multiple events per day,
+ * and advanced availability management
+ */
+
+const Calendar = {
+  currentDate: new Date(),
+  selectedDates: [],
+  selectedEvent: null,
+  events: {},
+  blockedDates: {},
+  bookedDates: {},
+  modal: null,
+  eventModal: null,
+  bookingDetailsModal: null,
+  viewMode: 'month', // 'month', 'week', or 'day'
+  
+  // Initialize calendar module
+  init() {
+    this.loadAvailability();
+    this.createCalendarTab();
+    this.setupEventListeners();
+    this.renderCalendar();
+    this.renderUpcomingBookings();
+    
+    // Add validation for date selection in the quote form
+    this.setupDateValidation();
+    
+    // Initialize drag and drop functionality
+    this.initDragAndDrop();
+  },
+  
+  // Initialize drag and drop functionality
+  initDragAndDrop() {
+    // Load the required libraries if not already available
+    if (typeof interact === 'undefined') {
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/interactjs@1.10.17/dist/interact.min.js';
+      script.async = true;
+      script.onload = () => {
+        this.setupDragAndDrop();
+        console.log('Drag and drop library loaded');
+      };
+      document.head.appendChild(script);
+    } else {
+      this.setupDragAndDrop();
+    }
+  },
+  
+  // Set up drag and drop interactions for calendar events
   setupDragAndDrop() {
     if (typeof interact === 'undefined') return;
     
@@ -50,7 +100,9 @@
     `;
     
     document.head.appendChild(dragStyles);
-  },  // Handle drag and drop event handlers
+  },
+  
+  // Handle drag and drop event handlers
   handleDragStart(event) {
     const element = event.target;
     
@@ -514,86 +566,6 @@
       alert.style.transition = 'opacity 0.5s';
       setTimeout(() => alert.remove(), 500);
     }, 3000);
-  },/**
- * Enhanced Calendar Module
- * Handles modern calendar functionality with time-based scheduling, multiple events per day,
- * and advanced availability management
- */
-
-const Calendar = {
-  currentDate: new Date(),
-  selectedDates: [],
-  selectedEvent: null,
-  events: {},
-  blockedDates: {},
-  bookedDates: {},
-  modal: null,
-  eventModal: null,
-  bookingDetailsModal: null,
-  viewMode: 'month', // 'month', 'week', or 'day'
-  
-  // Initialize calendar module
-  init() {
-    this.loadAvailability();
-    this.createCalendarTab();
-    this.setupEventListeners();
-    this.renderCalendar();
-    this.renderUpcomingBookings();
-    
-    // Add validation for date selection in the quote form
-    this.setupDateValidation();
-    
-    // Initialize drag and drop functionality
-    this.initDragAndDrop();
-  },
-  
-  // Initialize drag and drop functionality
-  initDragAndDrop() {
-    // Load the required libraries if not already available
-    if (typeof interact === 'undefined') {
-      const script = document.createElement('script');
-      script.src = 'https://cdn.jsdelivr.net/npm/interactjs@1.10.17/dist/interact.min.js';
-      script.async = true;
-      script.onload = () => {
-        this.setupDragAndDrop();
-        console.log('Drag and drop library loaded');
-      };
-      document.head.appendChild(script);
-    } else {
-      this.setupDragAndDrop();
-    }
-  },
-  
-  // Set up drag and drop interactions for calendar events
-  setupDragAndDrop() {
-    if (typeof interact === 'undefined') return;
-    
-    // Make events draggable
-    interact('.event-indicator, .time-event, .all-day-event, .day-time-event, .full-day-event')
-      .draggable({
-        inertia: true,
-        modifiers: [
-          interact.modifiers.restrictRect({
-            restriction: 'parent',
-            endOnly: true
-          })
-        ],
-        autoScroll: true,
-        listeners: {
-          start: event => this.handleDragStart(event),
-          move: event => this.handleDragMove(event),
-          end: event => this.handleDragEnd(event)
-        }
-      });
-      
-    // Set up drop zones
-    interact('.calendar-day, .hour-cell, .hour-events, .day-column')
-      .dropzone({
-        overlap: 'pointer',
-        ondragenter: event => this.handleDragEnter(event),
-        ondragleave: event => this.handleDragLeave(event),
-        ondrop: event => this.handleDrop(event)
-      });
   },
   
   // Load availability data from Firebase
@@ -2420,6 +2392,193 @@ const Calendar = {
     
     // Show the modal
     modal.style.display = 'flex';
+  },
+  
+  // Create booking details modal
+  createBookingDetailsModal() {
+    // Create modal element
+    const modal = document.createElement('div');
+    modal.className = 'booking-details-modal';
+    modal.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(0, 0, 0, 0.7);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 1rem;
+    `;
+    
+    // Create modal content
+    const content = document.createElement('div');
+    content.className = 'modal-content';
+    content.style.cssText = `
+      background-color: var(--card-bg);
+      border-radius: var(--border-radius);
+      box-shadow: var(--shadow-lg);
+      width: 100%;
+      max-width: 500px;
+      max-height: 90vh;
+      overflow-y: auto;
+      padding: 2rem;
+      position: relative;
+    `;
+    
+    // Add close button
+    const closeBtn = document.createElement('div');
+    closeBtn.className = 'modal-close';
+    closeBtn.innerHTML = '<i class="fas fa-times"></i>';
+    closeBtn.style.cssText = `
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      cursor: pointer;
+      font-size: 1.25rem;
+      color: var(--gray-500);
+    `;
+    closeBtn.addEventListener('click', () => {
+      modal.style.display = 'none';
+    });
+    
+    // Modal content
+    content.innerHTML = `
+      <h3 class="modal-title" style="margin-bottom: 1.5rem;">Booking Details</h3>
+      
+      <div class="booking-details-content" style="margin-bottom: 1.5rem;">
+        <!-- Booking details will be inserted here -->
+      </div>
+      
+      <div class="btn-group">
+        <button type="button" id="editBookingBtn" class="btn btn-primary">
+          <i class="fas fa-edit"></i> Edit
+        </button>
+        <button type="button" id="cancelBookingBtn" class="btn btn-danger">
+          <i class="fas fa-ban"></i> Cancel Booking
+        </button>
+        <button type="button" class="btn btn-outline" id="closeBookingDetailsBtn">
+          <i class="fas fa-times"></i> Close
+        </button>
+      </div>
+    `;
+    
+    // Add everything to DOM
+    content.appendChild(closeBtn);
+    modal.appendChild(content);
+    document.body.appendChild(modal);
+    
+    // Add event listeners
+    content.querySelector('#closeBookingDetailsBtn').addEventListener('click', () => {
+      modal.style.display = 'none';
+    });
+    
+    content.querySelector('#cancelBookingBtn').addEventListener('click', () => {
+      this.handleCancelBooking(modal.dataset.eventId, modal.dataset.eventDate);
+      modal.style.display = 'none';
+    });
+    
+    // Store modal reference
+    this.bookingDetailsModal = modal;
+  },
+  
+  // Handle cancel booking
+  handleCancelBooking(eventId, dateStr) {
+    if (!eventId || !dateStr || !this.events[dateStr]) {
+      return;
+    }
+    
+    // Find the event
+    const event = this.events[dateStr].find(e => e.id === eventId);
+    if (!event) {
+      return;
+    }
+    
+    // Confirm cancellation
+    if (confirm(`Are you sure you want to cancel this booking for ${event.title}?`)) {
+      // If this is part of a booking range, ask if all should be cancelled
+      if (event.clientData && event.clientData.projectStartDate && event.clientData.projectEndDate) {
+        const cancelAll = confirm('Cancel all related booking dates for this project?');
+        
+        if (cancelAll) {
+          // Find and remove all related events
+          Object.keys(this.events).forEach(date => {
+            this.events[date] = this.events[date].filter(e => {
+              if (e.type === 'booked' && e.clientData &&
+                  e.clientData.projectStartDate === event.clientData.projectStartDate &&
+                  e.clientData.projectEndDate === event.clientData.projectEndDate) {
+                // This is a related event, remove it
+                return false;
+              }
+              return true;
+            });
+            
+            // Remove empty date arrays
+            if (this.events[date].length === 0) {
+              delete this.events[date];
+            }
+          });
+        } else {
+          // Just remove this specific event
+          this.events[dateStr] = this.events[dateStr].filter(e => e.id !== eventId);
+          
+          // Remove empty date array
+          if (this.events[dateStr].length === 0) {
+            delete this.events[dateStr];
+          }
+        }
+      } else {
+        // Remove just this event
+        this.events[dateStr] = this.events[dateStr].filter(e => e.id !== eventId);
+        
+        // Remove empty date array
+        if (this.events[dateStr].length === 0) {
+          delete this.events[dateStr];
+        }
+      }
+      
+      // Save changes
+      this.saveAvailability();
+      
+      // Refresh calendar
+      this.renderCalendar();
+      this.renderUpcomingBookings();
+      
+      // Show cancellation notification
+      this.showCancellationNotification(event.title);
+    }
+  },
+  
+  // Show cancellation notification
+  showCancellationNotification(title) {
+    const notification = document.createElement('div');
+    notification.className = 'alert alert-danger cancellation-alert';
+    notification.style.cssText = `
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      max-width: 400px;
+      z-index: 1000;
+    `;
+    
+    notification.innerHTML = `
+      <i class="fas fa-ban"></i>
+      <div>
+        <strong>Booking Cancelled</strong>
+        <p>The booking for "${title}" has been cancelled.</p>
+      </div>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    // Remove after 3 seconds
+    setTimeout(() => {
+      notification.style.opacity = '0';
+      notification.style.transition = 'opacity 0.5s';
+      setTimeout(() => notification.remove(), 500);
+    }, 3000);
   },
   
   // Show block date modal
