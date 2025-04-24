@@ -659,7 +659,6 @@ const UI = {
   
   // Save as PDF
   savePdf(sectionEl, title) {
-    alert(`In a production environment, this would generate a PDF of the ${title.toLowerCase()}. For now, please use the Print function and save as PDF.`);
     this.printSection(sectionEl, title);
   },
   
