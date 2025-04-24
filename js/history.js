@@ -479,7 +479,12 @@ const History = {
       <button class="btn btn-outline pdf-btn">
         <i class="fas fa-file-pdf"></i> Save as PDF
       </button>
-      <button class="btn btn-primary duplicate-btn">
+      ${item.type === 'quote' ? `
+      <button class="btn btn-primary convert-to-invoice-btn">
+        <i class="fas fa-file-invoice-dollar"></i> Convert to Invoice
+      </button>
+      ` : ''}
+      <button class="btn ${item.type === 'quote' ? 'btn-outline' : 'btn-primary'} duplicate-btn">
         <i class="fas fa-copy"></i> Duplicate
       </button>
     `;
@@ -506,6 +511,61 @@ const History = {
     modal.querySelector('.duplicate-btn').addEventListener('click', () => {
       this.duplicateHistoryItem(item.id);
       modal.remove();
+    });
+    
+    if (item.type === 'quote') {
+      modal.querySelector('.convert-to-invoice-btn').addEventListener('click', () => {
+        this.convertToInvoice(item.id);
+        modal.remove();
+      });
+    }
+  },
+  
+  // Convert a quote from history to an invoice
+  convertToInvoice(id) {
+    // Find the quote in history data
+    const quoteItem = this.historyData.find(item => item.id === id && item.type === 'quote');
+    if (!quoteItem) {
+      alert('Quote not found in history.');
+      return;
+    }
+
+    // Verify PIN before proceeding
+    PinAuth.verifyPin(() => {
+      // Restore quote data to AppState
+      if (quoteItem.quoteData) {
+        AppState.quoteData = { ...quoteItem.quoteData };
+        AppState.quoteTotal = quoteItem.amount;
+        
+        // Calculate deposit amount based on client type
+        const clientType = quoteItem.quoteData.clientType || 'regular';
+        AppState.depositPercentage = AppState.rates.depositRates[clientType] || 0.25;
+        AppState.depositAmount = Math.round(AppState.quoteTotal * AppState.depositPercentage);
+      } else {
+        alert('Quote data is missing or corrupted.');
+        return;
+      }
+
+      // Switch to calculator tab
+      document.querySelector('.tab[data-tab="calculator"]').click();
+      
+      // Show loading while transitioning
+      const loadingIndicator = document.getElementById('loadingIndicator');
+      if (loadingIndicator) loadingIndicator.style.display = 'flex';
+      
+      // Hide all result sections
+      document.getElementById('quoteSection').style.display = 'none';
+      document.getElementById('invoiceSection').style.display = 'none';
+      
+      // Use setTimeout to ensure UI updates before continuing
+      setTimeout(() => {
+        // Now invoke the UI.handleGenerateInvoice method to generate the invoice
+        // This will handle prompting for invoice number and other details
+        UI.handleGenerateInvoice();
+        
+        // Hide loading indicator
+        if (loadingIndicator) loadingIndicator.style.display = 'none';
+      }, 500);
     });
   },
   
