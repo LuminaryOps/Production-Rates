@@ -18,6 +18,8 @@ const AppState = {
     bookedDates: {},
     blockedDates: {}
   },
+  // Add historyData to match Calendar's pattern
+  historyData: [],
   usingFirebase: false,
   
   // Initialize the application
@@ -34,20 +36,27 @@ const AppState = {
       this.rates.businessInfo.name = "LuminaryOps Technical Production";
       
       // Initialize Firebase integration
-      this.initFirebase();
+      await this.initFirebase();
       
       // Initialize modules
       UI.init();
       Calculator.init(this.rates);
       Signature.init();
       Payment.init(this.rates.paymentMethods);
-      History.init();
       
       // Initialize PIN Authentication
       PinAuth.init();
       
-      // Initialize Calendar
-      Calendar.init();
+      // Initialize History first (wait for it to complete)
+      await History.init();
+      
+      // Then initialize Calendar
+      await Calendar.init();
+      
+      // Load data from Firebase if connected
+      if (this.usingFirebase) {
+        await this.loadDataFromFirebase();
+      }
       
       console.log('App initialized successfully');
     } catch (error) {
@@ -68,9 +77,6 @@ const AppState = {
         
         // Add Firebase status indicator
         this.addFirebaseStatusIndicator(true);
-        
-        // Load data from Firebase
-        this.loadDataFromFirebase();
       } else {
         console.error('Firebase initialization failed');
         this.addFirebaseStatusIndicator(false);
