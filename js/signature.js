@@ -16,6 +16,17 @@ const Signature = {
   init() {
     this.createAcceptButton();
     this.initEmailJS();
+    
+    // Ensure History module is ready for signature events
+    if (typeof History !== 'undefined') {
+      console.log('Notifying History module that Signature module is ready');
+      
+      // Give a small delay to ensure History module is initialized
+      setTimeout(() => {
+        const readyEvent = new CustomEvent('signatureModuleReady');
+        document.dispatchEvent(readyEvent);
+      }, 500);
+    }
   },
   
   // Initialize EmailJS
@@ -434,6 +445,38 @@ const Signature = {
       }
     }
     
+    // Emit an event that the quote was accepted
+    const quoteId = this.quoteIdToSign || (AppState.quoteData ? AppState.quoteData.id : null);
+    if (quoteId) {
+      console.log('Preparing to dispatch quoteAccepted event for ID:', quoteId);
+      
+      // Create a clean copy of signature data for the event
+      const eventSignatureData = {
+        name: signatureData.name,
+        email: signatureData.email,
+        title: signatureData.title || '',
+        signature: signatureData.signature,
+        timestamp: new Date().toISOString()
+      };
+      
+      try {
+        // Dispatch a custom event
+        const acceptedEvent = new CustomEvent('quoteAccepted', {
+          detail: {
+            quoteId: quoteId,
+            signatureData: eventSignatureData
+          }
+        });
+        
+        document.dispatchEvent(acceptedEvent);
+        console.log('Quote accepted event dispatched for quote ID:', quoteId);
+      } catch (error) {
+        console.error('Error dispatching quote accepted event:', error);
+      }
+    } else {
+      console.warn('No quote ID available for event dispatch');
+    }
+    
     // Send emails
     this.sendAcceptanceEmails(signatureData);
     
@@ -442,21 +485,6 @@ const Signature = {
     
     // Create and display acceptance confirmation
     this.showAcceptanceConfirmation(signatureData);
-    
-    // Emit an event that the quote was accepted
-    // This will be used by the History module to update the quote status
-    const quoteId = this.quoteIdToSign || (AppState.quoteData ? AppState.quoteData.id : null);
-    if (quoteId) {
-      // Dispatch a custom event
-      const acceptedEvent = new CustomEvent('quoteAccepted', {
-        detail: {
-          quoteId: quoteId,
-          signatureData: signatureData
-        }
-      });
-      document.dispatchEvent(acceptedEvent);
-      console.log('Quote accepted event dispatched for quote ID:', quoteId);
-    }
     
     // Reset the quoteIdToSign
     this.quoteIdToSign = null;
