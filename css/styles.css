@@ -1256,6 +1256,11 @@ body.light-mode {
 
 /* New Features Styles */
 
+/* Hide invoice conversion button on calculator page */
+.invoice-button-hidden {
+  display: none !important;
+}
+
 /* Paid stamp */
 .paid-stamp {
   position: absolute;
