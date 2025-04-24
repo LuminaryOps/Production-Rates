@@ -55,6 +55,8 @@ const History = {
                   <option value="all">All Documents</option>
                   <option value="quotes">Quotes Only</option>
                   <option value="invoices">Invoices Only</option>
+                  <option value="accepted-quotes">Accepted Quotes Only</option>
+                  <option value="unaccepted-quotes">Unaccepted Quotes Only</option>
                 </select>
               </div>
             </div>
@@ -121,6 +123,35 @@ const History = {
         }
       }, 700); // Wait for invoice to be rendered
     });
+    
+    // Listen for signature events to update quote status
+    document.addEventListener('quoteAccepted', (event) => {
+      if (event.detail && event.detail.quoteId) {
+        this.updateQuoteAcceptanceStatus(event.detail.quoteId, event.detail.signatureData);
+      }
+    });
+  },
+  
+  // Update quote acceptance status when signed
+  async updateQuoteAcceptanceStatus(quoteId, signatureData) {
+    // Find the quote in history
+    const quoteIndex = this.historyData.findIndex(item => 
+      item.type === 'quote' && item.id === quoteId);
+    
+    if (quoteIndex !== -1) {
+      // Update the quote with signature data
+      this.historyData[quoteIndex].accepted = true;
+      this.historyData[quoteIndex].signatureData = signatureData;
+      this.historyData[quoteIndex].acceptedDate = new Date().toISOString();
+      
+      // Save updated history
+      await this.saveHistory();
+      
+      // Refresh display if history tab is active
+      if (document.getElementById('history').classList.contains('active')) {
+        this.refreshHistoryDisplay();
+      }
+    }
   },
   
   // Load history from Firebase or localStorage
@@ -225,7 +256,8 @@ const History = {
       amount: AppState.quoteTotal,
       date: new Date().toISOString(),
       quoteData: { ...AppState.quoteData },
-      html: document.getElementById('quoteSection').innerHTML
+      html: document.getElementById('quoteSection').innerHTML,
+      accepted: false // New field to track acceptance status
     };
     
     // Add to history
@@ -284,6 +316,8 @@ const History = {
       // Apply type filter
       if (filter === 'quotes' && item.type !== 'quote') return false;
       if (filter === 'invoices' && item.type !== 'invoice') return false;
+      if (filter === 'accepted-quotes' && (item.type !== 'quote' || !item.accepted)) return false;
+      if (filter === 'unaccepted-quotes' && (item.type !== 'quote' || item.accepted)) return false;
       
       // Apply search
       if (searchTerm) {
@@ -305,67 +339,148 @@ const History = {
       return;
     }
     
-    // Render history items
+    // Group items by type and acceptance status
+    const groupedItems = {
+      acceptedQuotes: [],
+      unacceptedQuotes: [],
+      invoices: []
+    };
+    
     filteredItems.forEach(item => {
-      const historyItem = document.createElement('div');
-      historyItem.className = 'history-item';
-      historyItem.style.cssText = `
-        background-color: var(--gray-200);
-        border-radius: var(--border-radius);
-        padding: 1.25rem;
-        margin-bottom: 1rem;
-        transition: transform 0.2s;
-      `;
+      if (item.type === 'quote') {
+        if (item.accepted) {
+          groupedItems.acceptedQuotes.push(item);
+        } else {
+          groupedItems.unacceptedQuotes.push(item);
+        }
+      } else if (item.type === 'invoice') {
+        groupedItems.invoices.push(item);
+      }
+    });
+    
+    // Create sections based on filter
+    if (filter === 'all' || filter === 'accepted-quotes') {
+      this.renderHistorySection(historyList, groupedItems.acceptedQuotes, 'Accepted Quotes');
+    }
+    
+    if (filter === 'all' || filter === 'unaccepted-quotes') {
+      this.renderHistorySection(historyList, groupedItems.unacceptedQuotes, 'Unaccepted Quotes');
+    }
+    
+    if (filter === 'quotes') {
+      this.renderHistorySection(historyList, [...groupedItems.acceptedQuotes, ...groupedItems.unacceptedQuotes], 'Quotes');
+    }
+    
+    if (filter === 'all' || filter === 'invoices') {
+      this.renderHistorySection(historyList, groupedItems.invoices, 'Invoices');
+    }
+  },
+  
+  // Render a section of history items
+  renderHistorySection(container, items, title) {
+    if (items.length === 0) return;
+    
+    // Add section header
+    const sectionHeader = document.createElement('div');
+    sectionHeader.className = 'history-section-header';
+    sectionHeader.innerHTML = `<h3>${title}</h3>`;
+    sectionHeader.style.cssText = `
+      margin-top: 1.5rem;
+      margin-bottom: 1rem;
+      padding-bottom: 0.5rem;
+      border-bottom: 1px solid var(--gray-300);
+      color: var(--gray-800);
+    `;
+    
+    container.appendChild(sectionHeader);
+    
+    // Render items
+    items.forEach(item => this.renderHistoryItem(container, item));
+  },
+  
+  // Render a single history item
+  renderHistoryItem(container, item) {
+    const historyItem = document.createElement('div');
+    historyItem.className = 'history-item';
+    historyItem.style.cssText = `
+      background-color: var(--gray-200);
+      border-radius: var(--border-radius);
+      padding: 1.25rem;
+      margin-bottom: 1rem;
+      transition: transform 0.2s;
+    `;
+    
+    // Add a subtle glow for accepted quotes
+    if (item.type === 'quote' && item.accepted) {
+      historyItem.style.borderLeft = '3px solid var(--success)';
+      historyItem.style.boxShadow = 'var(--shadow), 0 0 5px var(--success)';
+    }
+    
+    // Format date
+    const itemDate = new Date(item.date);
+    const formattedDate = itemDate.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+    
+    // Create badge based on item type and status
+    let badgeClass = 'badge-primary';
+    let badgeText = 'Quote';
+    
+    if (item.type === 'invoice') {
+      badgeClass = 'badge-success';
+      badgeText = 'Invoice';
+    } else if (item.type === 'quote' && item.accepted) {
+      badgeClass = 'badge-success';
+      badgeText = 'Accepted Quote';
+    }
+    
+    historyItem.innerHTML = `
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
+        <div>
+          <span class="badge ${badgeClass}" style="margin-right: 0.5rem;">
+            ${badgeText}
+          </span>
+          <span style="font-weight: 500;">${formattedDate}</span>
+        </div>
+        <div>
+          ${item.type === 'invoice' ? `<span style="margin-right: 0.5rem; font-size: 0.875rem;">${item.invoiceNumber}</span>` : ''}
+          <span style="font-weight: 600;">${Calculator.formatCurrency(item.amount)}</span>
+        </div>
+      </div>
       
-      // Format date
-      const itemDate = new Date(item.date);
-      const formattedDate = itemDate.toLocaleDateString('en-US', {
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric'
-      });
-      
-      historyItem.innerHTML = `
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.75rem;">
-          <div>
-            <span class="badge ${item.type === 'quote' ? 'badge-primary' : 'badge-success'}" style="margin-right: 0.5rem;">
-              ${item.type === 'quote' ? 'Quote' : 'Invoice'}
-            </span>
-            <span style="font-weight: 500;">${formattedDate}</span>
+      <div style="display: flex; justify-content: space-between; align-items: center;">
+        <div>
+          <div style="font-weight: 500; margin-bottom: 0.25rem;">${item.client}</div>
+          <div style="font-size: 0.875rem; color: var(--gray-600);">${item.project}</div>
+          ${item.accepted ? `
+          <div style="font-size: 0.75rem; color: var(--success); margin-top: 0.25rem;">
+            <i class="fas fa-signature"></i> Signed on ${new Date(item.acceptedDate).toLocaleDateString()}
           </div>
-          <div>
-            ${item.type === 'invoice' ? `<span style="margin-right: 0.5rem; font-size: 0.875rem;">${item.invoiceNumber}</span>` : ''}
-            <span style="font-weight: 600;">${Calculator.formatCurrency(item.amount)}</span>
-          </div>
+          ` : ''}
         </div>
         
-        <div style="display: flex; justify-content: space-between; align-items: center;">
-          <div>
-            <div style="font-weight: 500; margin-bottom: 0.25rem;">${item.client}</div>
-            <div style="font-size: 0.875rem; color: var(--gray-600);">${item.project}</div>
-          </div>
-          
-          <div class="history-actions" style="display: flex; gap: 0.5rem;">
-            <button class="btn btn-sm btn-outline history-view" data-id="${item.id}">
-              <i class="fas fa-eye"></i> View
-            </button>
-            <button class="btn btn-sm btn-outline history-duplicate" data-id="${item.id}">
-              <i class="fas fa-copy"></i> Duplicate
-            </button>
-            <button class="btn btn-sm btn-outline history-delete" data-id="${item.id}">
-              <i class="fas fa-trash"></i>
-            </button>
-          </div>
+        <div class="history-actions" style="display: flex; gap: 0.5rem;">
+          <button class="btn btn-sm btn-outline history-view" data-id="${item.id}">
+            <i class="fas fa-eye"></i> View
+          </button>
+          <button class="btn btn-sm btn-outline history-duplicate" data-id="${item.id}">
+            <i class="fas fa-copy"></i> Duplicate
+          </button>
+          <button class="btn btn-sm btn-outline history-delete" data-id="${item.id}">
+            <i class="fas fa-trash"></i>
+          </button>
         </div>
-      `;
-      
-      historyList.appendChild(historyItem);
-      
-      // Add event listeners
-      historyItem.querySelector('.history-view').addEventListener('click', () => this.viewHistoryItem(item.id));
-      historyItem.querySelector('.history-duplicate').addEventListener('click', () => this.duplicateHistoryItem(item.id));
-      historyItem.querySelector('.history-delete').addEventListener('click', () => this.deleteHistoryItem(item.id));
-    });
+      </div>
+    `;
+    
+    container.appendChild(historyItem);
+    
+    // Add event listeners
+    historyItem.querySelector('.history-view').addEventListener('click', () => this.viewHistoryItem(item.id));
+    historyItem.querySelector('.history-duplicate').addEventListener('click', () => this.duplicateHistoryItem(item.id));
+    historyItem.querySelector('.history-delete').addEventListener('click', () => this.deleteHistoryItem(item.id));
   },
   
   // View history item
@@ -443,11 +558,30 @@ const History = {
       day: 'numeric'
     });
     
+    // Add badge based on item type and status
+    let badgeClass = 'badge-primary';
+    let badgeText = 'Quote';
+    
+    if (item.type === 'invoice') {
+      badgeClass = 'badge-success';
+      badgeText = 'Invoice';
+    } else if (item.type === 'quote' && item.accepted) {
+      badgeClass = 'badge-success';
+      badgeText = 'Accepted Quote';
+    }
+    
     header.innerHTML = `
-      <h3>${item.type === 'quote' ? 'Quote' : 'Invoice'} - ${item.client}</h3>
+      <div>
+        <h3 style="margin-bottom: 0.25rem;">${item.type === 'quote' ? 'Quote' : 'Invoice'} - ${item.client}</h3>
+        <div style="display: flex; align-items: center;">
+          <span class="badge ${badgeClass}" style="margin-right: 0.5rem;">
+            ${badgeText}
+          </span>
+          <span style="font-size: 0.875rem; color: var(--gray-600);">${formattedDate}</span>
+        </div>
+      </div>
       <div style="text-align: right;">
         <div style="font-weight: 600;">${Calculator.formatCurrency(item.amount)}</div>
-        <div style="font-size: 0.875rem; color: var(--gray-600);">${formattedDate}</div>
         ${item.type === 'invoice' ? `<div style="font-size: 0.875rem; color: var(--gray-600);">${item.invoiceNumber}</div>` : ''}
       </div>
     `;
@@ -461,6 +595,44 @@ const History = {
     documentContent.querySelectorAll('.btn-group').forEach(btnGroup => {
       btnGroup.remove();
     });
+    
+    // Add signature display if available
+    if (item.type === 'quote' && item.accepted && item.signatureData) {
+      const signatureDisplay = document.createElement('div');
+      signatureDisplay.className = 'signature-display';
+      signatureDisplay.style.cssText = `
+        margin-top: 2rem;
+        padding-top: 1.5rem;
+        border-top: 1px solid var(--gray-300);
+      `;
+      
+      const signDate = new Date(item.acceptedDate).toLocaleDateString('en-US', {
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      
+      signatureDisplay.innerHTML = `
+        <h4 style="margin-bottom: 1rem;">Accepted By:</h4>
+        <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+          <div>
+            <div style="font-weight: 600;">${item.signatureData.name}</div>
+            <div style="font-size: 0.875rem; color: var(--gray-600);">${item.signatureData.title || ''}</div>
+            <div style="font-size: 0.875rem; color: var(--gray-600);">${item.signatureData.email}</div>
+          </div>
+          <div>
+            <img src="${item.signatureData.signature}" alt="Signature" style="height: 60px; max-width: 200px;">
+            <div style="font-size: 0.75rem; color: var(--gray-500); margin-top: 0.25rem; text-align: right;">
+              ${signDate}
+            </div>
+          </div>
+        </div>
+      `;
+      
+      documentContent.appendChild(signatureDisplay);
+    }
     
     // Add actions
     const actions = document.createElement('div');
@@ -479,8 +651,13 @@ const History = {
       <button class="btn btn-outline pdf-btn">
         <i class="fas fa-file-pdf"></i> Save as PDF
       </button>
+      ${item.type === 'quote' && !item.accepted ? `
+      <button class="btn btn-primary sign-quote-btn">
+        <i class="fas fa-signature"></i> Sign Quote
+      </button>
+      ` : ''}
       ${item.type === 'quote' ? `
-      <button class="btn btn-primary convert-to-invoice-btn">
+      <button class="btn ${item.type === 'quote' && !item.accepted ? 'btn-outline' : 'btn-primary'} convert-to-invoice-btn">
         <i class="fas fa-file-invoice-dollar"></i> Convert to Invoice
       </button>
       ` : ''}
@@ -518,6 +695,21 @@ const History = {
         this.convertToInvoice(item.id);
         modal.remove();
       });
+      
+      // Add sign quote button if not accepted
+      if (!item.accepted) {
+        modal.querySelector('.sign-quote-btn').addEventListener('click', () => {
+          modal.remove();
+          // Use the existing signature functionality
+          if (typeof Signature !== 'undefined') {
+            // Store the quote ID for reference
+            Signature.quoteIdToSign = item.id;
+            Signature.showSignatureModal();
+          } else {
+            alert('Signature module not available.');
+          }
+        });
+      }
     }
   },
   
@@ -581,6 +773,37 @@ const History = {
     const inlineStyles = Array.from(document.querySelectorAll('style'))
       .map(style => `<style>${style.innerHTML}</style>`).join('');
     
+    // Build content with signature if available
+    let signatureHTML = '';
+    if (item.type === 'quote' && item.accepted && item.signatureData) {
+      const signDate = new Date(item.acceptedDate).toLocaleDateString('en-US', {
+        year: 'numeric', 
+        month: 'long', 
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+      
+      signatureHTML = `
+        <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 1px solid #ddd;">
+          <h4 style="margin-bottom: 1rem;">Accepted By:</h4>
+          <div style="display: flex; justify-content: space-between; align-items: flex-end;">
+            <div>
+              <div style="font-weight: 600;">${item.signatureData.name}</div>
+              <div style="font-size: 0.875rem; color: #666;">${item.signatureData.title || ''}</div>
+              <div style="font-size: 0.875rem; color: #666;">${item.signatureData.email}</div>
+            </div>
+            <div>
+              <img src="${item.signatureData.signature}" alt="Signature" style="height: 60px; max-width: 200px;">
+              <div style="font-size: 0.75rem; color: #777; margin-top: 0.25rem; text-align: right;">
+                ${signDate}
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+    
     printWindow.document.write(`
       <!DOCTYPE html>
       <html>
@@ -632,6 +855,7 @@ const History = {
         <div class="container">
           <div class="result-section" style="display: block;">
             ${item.html}
+            ${signatureHTML}
           </div>
         </div>
         <script>
