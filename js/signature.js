@@ -10,6 +10,7 @@ const Signature = {
   modal: null,
   hasSigned: false,
   emailJSInitialized: false,
+  quoteIdToSign: null, // New property to track which quote is being signed
   
   // Initialize signature module
   init() {
@@ -441,6 +442,24 @@ const Signature = {
     
     // Create and display acceptance confirmation
     this.showAcceptanceConfirmation(signatureData);
+    
+    // Emit an event that the quote was accepted
+    // This will be used by the History module to update the quote status
+    const quoteId = this.quoteIdToSign || (AppState.quoteData ? AppState.quoteData.id : null);
+    if (quoteId) {
+      // Dispatch a custom event
+      const acceptedEvent = new CustomEvent('quoteAccepted', {
+        detail: {
+          quoteId: quoteId,
+          signatureData: signatureData
+        }
+      });
+      document.dispatchEvent(acceptedEvent);
+      console.log('Quote accepted event dispatched for quote ID:', quoteId);
+    }
+    
+    // Reset the quoteIdToSign
+    this.quoteIdToSign = null;
   },
   
   // Save signature data
