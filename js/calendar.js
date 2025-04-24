@@ -33,285 +33,171 @@ const Calendar = {
   
   // Initialize drag and drop functionality
   initDragAndDrop() {
-    // Load the required libraries if not already available
-    if (typeof interact === 'undefined') {
-      const script = document.createElement('script');
-      script.src = 'https://cdn.jsdelivr.net/npm/interactjs@1.10.17/dist/interact.min.js';
-      script.async = true;
-      script.onload = () => {
-        this.setupDragAndDrop();
-        console.log('Drag and drop library loaded');
-      };
-      document.head.appendChild(script);
-    } else {
-      this.setupDragAndDrop();
-    }
+    // Directly set up drag and drop without loading external libraries
+    this.setupDragAndDrop();
+    console.log('Native HTML5 drag and drop initialized');
   },
   
   // Set up drag and drop interactions for calendar events
   setupDragAndDrop() {
-    if (typeof interact === 'undefined') return;
+    // Find all draggable elements and make them draggable
+    const makeEventsDraggable = () => {
+      document.querySelectorAll('.event-indicator, .time-event, .all-day-event, .day-time-event, .full-day-event').forEach(element => {
+        // Set draggable attribute
+        element.setAttribute('draggable', 'true');
+        
+        // Add drag start event
+        element.addEventListener('dragstart', (e) => {
+          console.log("Drag started on element", element.textContent);
+          e.dataTransfer.setData('text/plain', JSON.stringify({
+            eventId: element.dataset.eventId,
+            originalDate: element.dataset.originalDate
+          }));
+          element.classList.add('is-dragging');
+        });
+        
+        // Add drag end event
+        element.addEventListener('dragend', (e) => {
+          element.classList.remove('is-dragging');
+        });
+      });
+    };
     
-    // Make events draggable
-    interact('.event-indicator, .time-event, .all-day-event, .day-time-event, .full-day-event')
-      .draggable({
-        inertia: true,
-        modifiers: [
-          interact.modifiers.restrictRect({
-            restriction: 'parent',
-            endOnly: true
-          })
-        ],
-        autoScroll: true,
-        onend: event => {
-          // Handle position reset AFTER drop processing
-          setTimeout(() => {
-            const element = event.target;
-            if (element) {
-              element.style.transform = 'translate(0px, 0px)';
-              element.setAttribute('data-x', 0);
-              element.setAttribute('data-y', 0);
+    // Make all calendar days drop targets
+    const setupDropTargets = () => {
+      document.querySelectorAll('.calendar-day, .hour-cell, .day-column').forEach(element => {
+        // Prevent default to allow drop
+        element.addEventListener('dragover', (e) => {
+          e.preventDefault();
+          element.classList.add('drop-target');
+        });
+        
+        // Handle drag enter
+        element.addEventListener('dragenter', (e) => {
+          e.preventDefault();
+          element.classList.add('drop-target');
+          console.log("Drag entered", element);
+        });
+        
+        // Handle drag leave
+        element.addEventListener('dragleave', (e) => {
+          element.classList.remove('drop-target');
+        });
+        
+        // Handle drop
+        element.addEventListener('drop', (e) => {
+          e.preventDefault();
+          element.classList.remove('drop-target');
+          
+          console.log("Drop event on", element);
+          
+          // Get dropped data
+          try {
+            const data = JSON.parse(e.dataTransfer.getData('text/plain'));
+            const { eventId, originalDate } = data;
+            
+            console.log("Dropped data:", data);
+            
+            // Get target date
+            let targetDateStr = '';
+            let targetHour = null;
+            
+            if (element.classList.contains('calendar-day')) {
+              // Get date from calendar day
+              const dayNumber = element.querySelector('.day-number').textContent;
+              const currentMonth = this.currentDate.getMonth();
+              const currentYear = this.currentDate.getFullYear();
+              
+              // Check if inactive
+              const isInactive = element.classList.contains('inactive');
+              if (isInactive) {
+                // Logic to determine prev/next month date
+                if (parseInt(dayNumber) > 15) {
+                  // Previous month
+                  const prevMonth = (currentMonth === 0) ? 11 : currentMonth - 1;
+                  const prevYear = (currentMonth === 0) ? currentYear - 1 : currentYear;
+                  targetDateStr = new Date(prevYear, prevMonth, parseInt(dayNumber)).toISOString().split('T')[0];
+                } else {
+                  // Next month
+                  const nextMonth = (currentMonth === 11) ? 0 : currentMonth + 1;
+                  const nextYear = (currentMonth === 11) ? currentYear + 1 : currentYear;
+                  targetDateStr = new Date(nextYear, nextMonth, parseInt(dayNumber)).toISOString().split('T')[0];
+                }
+              } else {
+                // Current month
+                targetDateStr = new Date(currentYear, currentMonth, parseInt(dayNumber)).toISOString().split('T')[0];
+              }
+            } else if (element.classList.contains('day-column') || element.classList.contains('hour-cell')) {
+              // Get date from day column or hour cell
+              const dayColumn = element.classList.contains('day-column') ? element : element.closest('.day-column');
+              if (dayColumn && dayColumn.dataset.date) {
+                targetDateStr = dayColumn.dataset.date;
+                
+                // If hour cell, get the hour
+                if (element.classList.contains('hour-cell')) {
+                  const hourCells = Array.from(dayColumn.querySelectorAll('.hour-cell'));
+                  targetHour = hourCells.indexOf(element);
+                }
+              }
             }
-          }, 100);
-        },
-        listeners: {
-          start: event => this.handleDragStart(event),
-          move: event => this.handleDragMove(event),
-          end: event => this.handleDragEnd(event)
+            
+            console.log(`Target date: ${targetDateStr}, hour: ${targetHour}`);
+            
+            // Move the event if target date is different from original
+            if (targetDateStr && eventId && originalDate && targetDateStr !== originalDate) {
+              this.moveEvent(eventId, originalDate, targetDateStr, targetHour);
+            }
+          } catch (err) {
+            console.error("Error processing drop:", err);
+          }
+        });
+      });
+    };
+    
+    // Call these functions to set up drag and drop
+    makeEventsDraggable();
+    setupDropTargets();
+    
+    // Also set up a mutation observer to handle dynamically added elements
+    const observer = new MutationObserver((mutations) => {
+      let needsRefresh = false;
+      
+      mutations.forEach(mutation => {
+        if (mutation.addedNodes.length > 0) {
+          needsRefresh = true;
         }
       });
       
-    // Set up drop zones
-    interact('.calendar-day, .hour-cell, .hour-events, .day-column')
-      .dropzone({
-        overlap: 0.30, // Require 30% overlap for a drop
-        ondragenter: event => this.handleDragEnter(event),
-        ondragleave: event => this.handleDragLeave(event),
-        ondrop: event => this.handleDrop(event)
-      });
-      
-    // Add drag and drop styles
-    const dragStyles = document.createElement('style');
-    dragStyles.textContent = `
-      .is-dragging {
-        opacity: 0.8 !important;
-        cursor: grabbing !important;
+      if (needsRefresh) {
+        makeEventsDraggable();
+        setupDropTargets();
       }
-      
-      .drag-ghost {
+    });
+    
+    // Start observing the calendar container
+    const calendarContainer = document.querySelector('.calendar-container');
+    if (calendarContainer) {
+      observer.observe(calendarContainer, { childList: true, subtree: true });
+    }
+    
+    // Add drag and drop styles
+    const style = document.createElement('style');
+    style.textContent = `
+      .is-dragging {
         opacity: 0.6;
-        pointer-events: none;
-        z-index: 9999;
+        cursor: grabbing;
       }
       
       .drop-target {
         background-color: rgba(255, 123, 0, 0.1);
         border: 2px dashed var(--primary) !important;
       }
+      
+      [draggable=true] {
+        cursor: grab;
+      }
     `;
-    
-    document.head.appendChild(dragStyles);
-  },
-  
-  // Handle drag and drop event handlers
-  handleDragStart(event) {
-    const element = event.target;
-    
-    // Mark the element as being dragged
-    element.classList.add('is-dragging');
-    
-    // Store the original position for reference
-    element.setAttribute('data-x', 0);
-    element.setAttribute('data-y', 0);
-    
-    // Add visual feedback
-    element.style.zIndex = '1000';
-    element.style.cursor = 'grabbing';
-    element.style.opacity = '0.8';
-    element.style.boxShadow = 'var(--shadow-lg)';
-    
-    // Create and show a "ghost" element under the cursor
-    const ghost = element.cloneNode(true);
-    ghost.classList.add('drag-ghost');
-    ghost.style.position = 'fixed';
-    ghost.style.top = '-1000px'; // Hide it initially
-    ghost.style.opacity = '0.6';
-    ghost.style.pointerEvents = 'none';
-    document.body.appendChild(ghost);
-    
-    // Store the ghost element and original event data
-    element.ghostElement = ghost;
-    
-    // Store the event ID and original date
-    this.draggedEventId = element.dataset.eventId;
-    this.draggedEventOriginalDate = element.dataset.originalDate;
-    
-    console.log(`Drag started - Event ID: ${this.draggedEventId}, Original date: ${this.draggedEventOriginalDate}`);
-  },
-  
-  handleDragMove(event) {
-    const element = event.target;
-    
-    // Update element's position
-    const x = (parseFloat(element.getAttribute('data-x')) || 0) + event.dx;
-    const y = (parseFloat(element.getAttribute('data-y')) || 0) + event.dy;
-    
-    // Apply transform to the dragged element
-    element.style.transform = `translate(${x}px, ${y}px)`;
-    
-    // Update position attributes
-    element.setAttribute('data-x', x);
-    element.setAttribute('data-y', y);
-    
-    // Update ghost element position
-    if (element.ghostElement) {
-      element.ghostElement.style.top = `${event.clientY - 20}px`;
-      element.ghostElement.style.left = `${event.clientX - 20}px`;
-    }
-  },
-  
-  handleDragEnd(event) {
-    const element = event.target;
-    
-    // Remove visual feedback
-    element.classList.remove('is-dragging');
-    element.style.zIndex = '';
-    element.style.cursor = '';
-    element.style.opacity = '';
-    element.style.boxShadow = '';
-    
-    // NOTE: We intentionally DO NOT reset the transform here
-    // to prevent the visual "snap back" before the drop is processed
-    // The transform will be reset after the drop handling is complete
-    
-    // Remove ghost element
-    if (element.ghostElement) {
-      element.ghostElement.remove();
-      element.ghostElement = null;
-    }
-    
-    // Drag end is called before drop, so we don't reset the tracking variables here
-    // They will be reset after the drop handler completes
-  },
-  
-  handleDragEnter(event) {
-    // Highlight the drop target
-    event.target.classList.add('drop-target');
-  },
-  
-  handleDragLeave(event) {
-    // Remove highlight from drop target
-    event.target.classList.remove('drop-target');
-  },
-  
-  handleDrop(event) {
-    // Remove highlight from drop target
-    event.target.classList.remove('drop-target');
-    
-    // Find the date from the drop target
-    let targetDateStr = '';
-    let targetHour = null;
-    
-    // Get the original dragged element
-    const draggedElement = event.relatedTarget;
-    if (!draggedElement) {
-      console.error("No dragged element found in drop event");
-      return;
-    }
-    
-    // Get actual date element from the drop target
-    let dateElement = event.target;
-    
-    // If we dropped onto a child element, navigate up to find the calendar day
-    if (!dateElement.classList.contains('calendar-day')) {
-      dateElement = dateElement.closest('.calendar-day');
-    }
-    
-    // If we found a valid calendar day
-    if (dateElement && dateElement.querySelector('.day-number')) {
-      const dayNumber = dateElement.querySelector('.day-number').textContent;
-      const currentMonth = this.currentDate.getMonth();
-      const currentYear = this.currentDate.getFullYear();
-      
-      // Check if day is from previous/next month
-      const isInactive = dateElement.classList.contains('inactive');
-      
-      if (isInactive) {
-        // Determine if this is previous or next month
-        if (parseInt(dayNumber) > 15) {
-          // Previous month (high day number at the start of the grid)
-          const prevMonth = (currentMonth === 0) ? 11 : currentMonth - 1;
-          const prevYear = (currentMonth === 0) ? currentYear - 1 : currentYear;
-          const targetDate = new Date(prevYear, prevMonth, parseInt(dayNumber));
-          targetDateStr = targetDate.toISOString().split('T')[0];
-        } else {
-          // Next month (low day number at the end of the grid)
-          const nextMonth = (currentMonth === 11) ? 0 : currentMonth + 1;
-          const nextYear = (currentMonth === 11) ? currentYear + 1 : currentYear;
-          const targetDate = new Date(nextYear, nextMonth, parseInt(dayNumber));
-          targetDateStr = targetDate.toISOString().split('T')[0];
-        }
-      } else {
-        // Current month
-        const targetDate = new Date(currentYear, currentMonth, parseInt(dayNumber));
-        targetDateStr = targetDate.toISOString().split('T')[0];
-      }
-      console.log(`Drop target: calendar day ${dayNumber}, date: ${targetDateStr}`);
-    } 
-    // If we're in week or day view
-    else if (event.target.classList.contains('day-column') || event.target.closest('.day-column')) {
-      // Get the day column
-      const dayColumn = event.target.classList.contains('day-column') ? 
-                        event.target : 
-                        event.target.closest('.day-column');
-      
-      if (dayColumn && dayColumn.dataset.date) {
-        targetDateStr = dayColumn.dataset.date;
-        console.log(`Drop target: day column, date: ${targetDateStr}`);
-        
-        // Get hour from position
-        if (event.target.classList.contains('hour-cell') || event.target.closest('.hour-cell')) {
-          const hourCell = event.target.classList.contains('hour-cell') ?
-                          event.target : 
-                          event.target.closest('.hour-cell');
-          
-          // Find all hour cells in this column
-          const hourCells = Array.from(dayColumn.querySelectorAll('.hour-cell'));
-          targetHour = hourCells.indexOf(hourCell);
-          console.log(`Found hour cell: ${targetHour}`);
-        } else {
-          // Get hour from Y position
-          const rect = dayColumn.getBoundingClientRect();
-          const relativeY = event.clientY - rect.top;
-          targetHour = Math.floor(relativeY / 60); // Each hour is 60px
-          console.log(`Calculated hour from position: ${targetHour}`);
-        }
-      }
-    }
-    
-    // Debug logging
-    const originalDate = draggedElement.dataset.originalDate;
-    const eventId = draggedElement.dataset.eventId;
-    
-    console.log(`Drag info - Element ID: ${draggedElement.id}, Event ID: ${eventId}, Original date: ${originalDate}, Target date: ${targetDateStr}`);
-    
-    // Move the event if we have valid target info and the target is different from the source
-    if (targetDateStr && eventId && originalDate && 
-        targetDateStr !== originalDate) {
-      this.moveEvent(eventId, originalDate, targetDateStr, targetHour);
-    } else if (targetDateStr && eventId && originalDate &&
-              targetDateStr === originalDate) {
-      console.log("Target date is the same as original date, not moving event");
-    } else {
-      console.log("Missing information for move: ", 
-                 { targetDate: targetDateStr, 
-                   eventId: eventId, 
-                   originalDate: originalDate });
-    }
-    
-    // Reset dragged event tracking
-    this.draggedEventId = null;
-    this.draggedEventOriginalDate = null;
+    document.head.appendChild(style);
   },
   
   // Move an event from one date to another
