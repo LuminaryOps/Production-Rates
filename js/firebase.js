@@ -1,6 +1,6 @@
 /**
- * Improved Firebase Integration Module
- * Handles all storage operations through Firebase with better handling for calendar data
+ * Firebase Integration Module
+ * Handles all storage operations through Firebase
  */
 
 const FirebaseStorage = {
@@ -45,30 +45,9 @@ const FirebaseStorage = {
   sanitizeDataForFirestore(data) {
     if (!data) return data;
     
-    // Special handling for calendar events object
-    if (data.events) {
-      const sanitizedData = { ...data };
-      const sanitizedEvents = {};
-      
-      // Process each date's events separately
-      for (const [dateStr, eventsArray] of Object.entries(data.events)) {
-        sanitizedEvents[dateStr] = JSON.stringify(eventsArray);
-      }
-      
-      sanitizedData.events = sanitizedEvents;
-      return this.sanitizeRemainingData(sanitizedData);
-    }
-    
-    return this.sanitizeRemainingData(data);
-  },
-  
-  // Sanitize the non-events parts of the data
-  sanitizeRemainingData(data) {
-    if (!data) return data;
-    
     // If it's an array, process each item
     if (Array.isArray(data)) {
-      return data.map(item => this.sanitizeRemainingData(item));
+      return data.map(item => this.sanitizeDataForFirestore(item));
     }
     
     // If it's an object, process each property
@@ -94,7 +73,7 @@ const FirebaseStorage = {
           }
         } else if (typeof value === 'object' && value !== null) {
           // For objects, recursively sanitize
-          sanitized[key] = this.sanitizeRemainingData(value);
+          sanitized[key] = this.sanitizeDataForFirestore(value);
         } else {
           // For primitive values, store as is
           sanitized[key] = value;
@@ -106,68 +85,6 @@ const FirebaseStorage = {
     
     // Return primitive values as is
     return data;
-  },
-  
-  // Restore data from Firestore format
-  restoreDataFromFirestore(sanitizedData) {
-    if (!sanitizedData) return sanitizedData;
-    
-    // Special handling for calendar events object
-    if (sanitizedData.events) {
-      const restoredData = { ...sanitizedData };
-      const restoredEvents = {};
-      
-      // Process each date's events separately
-      for (const [dateStr, eventsString] of Object.entries(sanitizedData.events)) {
-        try {
-          restoredEvents[dateStr] = JSON.parse(eventsString);
-        } catch (e) {
-          console.error(`Failed to parse events for date ${dateStr}:`, e);
-          restoredEvents[dateStr] = []; // Use empty array as fallback
-        }
-      }
-      
-      restoredData.events = restoredEvents;
-      return this.restoreRemainingData(restoredData);
-    }
-    
-    return this.restoreRemainingData(sanitizedData);
-  },
-  
-  // Restore the non-events parts of the data
-  restoreRemainingData(sanitizedData) {
-    if (!sanitizedData) return sanitizedData;
-    
-    // If it's an array, process each item
-    if (Array.isArray(sanitizedData)) {
-      return sanitizedData.map(item => this.restoreRemainingData(item));
-    }
-    
-    // If it's an object, process each property
-    if (typeof sanitizedData === 'object' && sanitizedData !== null) {
-      const restored = { ...sanitizedData };
-      
-      for (const [key, value] of Object.entries(restored)) {
-        // Try to parse stringified arrays and objects
-        if (typeof value === 'string' && 
-            (value.startsWith('[') || value.startsWith('{'))) {
-          try {
-            restored[key] = JSON.parse(value);
-          } catch (e) {
-            // If parsing fails, keep the original string
-            console.log(`Failed to parse ${key}, keeping as string`);
-          }
-        } else if (typeof value === 'object' && value !== null) {
-          // Recursively restore nested objects
-          restored[key] = this.restoreRemainingData(value);
-        }
-      }
-      
-      return restored;
-    }
-    
-    // Return primitive values as is
-    return sanitizedData;
   },
   
   // Save history data (quotes and invoices)
@@ -202,6 +119,42 @@ const FirebaseStorage = {
       console.error('Error saving history data:', error);
       return false;
     }
+  },
+  
+  // Restore data from Firestore format
+  restoreDataFromFirestore(sanitizedData) {
+    if (!sanitizedData) return sanitizedData;
+    
+    // If it's an array, process each item
+    if (Array.isArray(sanitizedData)) {
+      return sanitizedData.map(item => this.restoreDataFromFirestore(item));
+    }
+    
+    // If it's an object, process each property
+    if (typeof sanitizedData === 'object' && sanitizedData !== null) {
+      const restored = { ...sanitizedData };
+      
+      for (const [key, value] of Object.entries(restored)) {
+        // Try to parse stringified arrays and objects
+        if (typeof value === 'string' && 
+            (value.startsWith('[') || value.startsWith('{'))) {
+          try {
+            restored[key] = JSON.parse(value);
+          } catch (e) {
+            // If parsing fails, keep the original string
+            console.log(`Failed to parse ${key}, keeping as string`);
+          }
+        } else if (typeof value === 'object' && value !== null) {
+          // Recursively restore nested objects
+          restored[key] = this.restoreDataFromFirestore(value);
+        }
+      }
+      
+      return restored;
+    }
+    
+    // Return primitive values as is
+    return sanitizedData;
   },
   
   // Load history data
@@ -247,43 +200,7 @@ const FirebaseStorage = {
       // Convert availability data to be Firestore-compatible
       const sanitizedAvailability = this.sanitizeDataForFirestore(availability);
       
-      // Safety check - make sure events is not undefined
-      if (!sanitizedAvailability.events) {
-        sanitizedAvailability.events = {};
-      }
-      
-      // Batch write for better performance with large datasets
-      const batch = this.db.batch();
-      
-      // Store the main availability data (blockedDates and bookedDates)
-      const mainRef = this.db.collection('calendar').doc('availability');
-      batch.set(mainRef, {
-        blockedDates: sanitizedAvailability.blockedDates || {},
-        bookedDates: sanitizedAvailability.bookedDates || {}
-      });
-      
-      // Store events separately for each month to avoid size limits
-      // Group events by month
-      const eventsByMonth = {};
-      
-      for (const [dateStr, eventData] of Object.entries(sanitizedAvailability.events)) {
-        // Extract year and month from date string (YYYY-MM-DD)
-        const yearMonth = dateStr.substring(0, 7); // "YYYY-MM"
-        if (!eventsByMonth[yearMonth]) {
-          eventsByMonth[yearMonth] = {};
-        }
-        eventsByMonth[yearMonth][dateStr] = eventData;
-      }
-      
-      // Save each month's events as a separate document
-      for (const [yearMonth, monthEvents] of Object.entries(eventsByMonth)) {
-        const monthRef = this.db.collection('calendar').doc(`events_${yearMonth}`);
-        batch.set(monthRef, { events: monthEvents });
-      }
-      
-      // Commit all the writes
-      await batch.commit();
-      
+      await this.db.collection('calendar').doc('availability').set(sanitizedAvailability);
       console.log('Calendar data saved to Firebase');
       return true;
     } catch (error) {
@@ -297,60 +214,19 @@ const FirebaseStorage = {
     try {
       if (!this.isInitialized) await this.init();
       
-      // Get the main availability document
-      const mainDoc = await this.db.collection('calendar').doc('availability').get();
-      
-      let availability = { 
-        blockedDates: {}, 
-        bookedDates: {}, 
-        events: {} 
-      };
-      
-      if (mainDoc.exists) {
-        // Get blockedDates and bookedDates
-        const mainData = mainDoc.data();
-        availability.blockedDates = mainData.blockedDates || {};
-        availability.bookedDates = mainData.bookedDates || {};
-        
-        // Query all events documents (they start with "events_")
-        const eventsQuery = await this.db.collection('calendar')
-          .where(firebase.firestore.FieldPath.documentId(), '>=', 'events_')
-          .where(firebase.firestore.FieldPath.documentId(), '<=', 'events_\uf8ff')
-          .get();
-        
-        // Combine all events from different months
-        eventsQuery.forEach(doc => {
-          const monthEvents = doc.data().events || {};
-          
-          // Add each date's events to the main events object
-          for (const [dateStr, eventsData] of Object.entries(monthEvents)) {
-            try {
-              // Parse events data if it's a string
-              const parsedEvents = typeof eventsData === 'string' ? 
-                JSON.parse(eventsData) : eventsData;
-              
-              availability.events[dateStr] = parsedEvents;
-            } catch (e) {
-              console.error(`Error parsing events for ${dateStr}:`, e);
-            }
-          }
-        });
-        
-        // Restore from Firestore format
-        availability = this.restoreDataFromFirestore(availability);
+      const doc = await this.db.collection('calendar').doc('availability').get();
+      if (doc.exists) {
+        const sanitizedData = doc.data();
+        const restored = this.restoreDataFromFirestore(sanitizedData);
         console.log('Calendar data loaded from Firebase');
+        return restored;
       } else {
         console.log('No calendar data found in Firebase');
+        return { bookedDates: {}, blockedDates: {} };
       }
-      
-      return availability;
     } catch (error) {
       console.error('Error loading calendar data:', error);
-      return { 
-        blockedDates: {}, 
-        bookedDates: {}, 
-        events: {} 
-      };
+      return { bookedDates: {}, blockedDates: {} };
     }
   },
   
