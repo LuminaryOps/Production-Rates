@@ -1232,6 +1232,7 @@ const Calendar = {
         
         // Store event data
         eventIndicator.dataset.eventId = event.id;
+        eventIndicator.dataset.originalDate = dateStr;
         
         // Add event handler
         eventIndicator.addEventListener('click', (e) => {
@@ -1426,6 +1427,7 @@ const Calendar = {
             
             fullDayEvent.textContent = event.title;
             fullDayEvent.dataset.eventId = event.id;
+            fullDayEvent.dataset.originalDate = dateStr;
             fullDayEvent.addEventListener('click', () => this.showEventDetails(event));
             
             // Insert at the beginning
@@ -1460,6 +1462,7 @@ const Calendar = {
             `;
             
             eventElement.dataset.eventId = event.id;
+            eventElement.dataset.originalDate = dateStr;
             eventElement.addEventListener('click', () => this.showEventDetails(event));
             
             dayColumn.appendChild(eventElement);
@@ -1686,6 +1689,7 @@ const Calendar = {
           
           eventElement.innerHTML = `<div class="event-title">${event.title}</div>`;
           eventElement.dataset.eventId = event.id;
+          eventElement.dataset.originalDate = dateStr;
           eventElement.addEventListener('click', () => this.showEventDetails(event));
           
           allDayEventsContainer.appendChild(eventElement);
@@ -1765,6 +1769,7 @@ const Calendar = {
         `;
         
         eventElement.dataset.eventId = event.id;
+        eventElement.dataset.originalDate = dateStr;
         eventElement.addEventListener('click', () => this.showEventDetails(event));
         
         timeGrid.appendChild(eventElement);
