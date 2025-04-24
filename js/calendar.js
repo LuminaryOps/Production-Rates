@@ -251,26 +251,68 @@ const Calendar = {
       { id: 'day', icon: 'calendar-day', label: 'Day' }
     ];
     
+    // Determine if we're in dark mode
+    const isDarkMode = !document.body.classList.contains('light-mode');
+    
     viewModes.forEach(mode => {
       const btn = document.createElement('button');
       btn.className = `view-mode-btn${this.viewMode === mode.id ? ' active' : ''}`;
       btn.dataset.mode = mode.id;
       btn.innerHTML = `<i class="fas fa-${mode.icon}"></i> ${mode.label}`;
+      
+      // Apply theme-appropriate styling 
       btn.style.cssText = `
         padding: 0.5rem 1rem;
         border: 1px solid var(--gray-300);
         background-color: var(--gray-100);
+        color: ${isDarkMode ? 'var(--gray-800)' : 'var(--gray-800)'};
         border-radius: 8px;
         cursor: pointer;
         transition: all 0.2s;
         font-size: 0.875rem;
       `;
+      
+      // Add hover and active states that respect theme
+      if (this.viewMode === mode.id) {
+        btn.style.backgroundColor = 'var(--primary)';
+        btn.style.borderColor = 'var(--primary-dark)';
+        btn.style.color = 'white';
+      }
+      
+      btn.addEventListener('mouseenter', () => {
+        if (this.viewMode !== mode.id) {
+          btn.style.backgroundColor = isDarkMode ? 'var(--gray-200)' : 'var(--gray-200)';
+          btn.style.color = isDarkMode ? 'var(--primary)' : 'var(--primary)';
+        }
+      });
+      
+      btn.addEventListener('mouseleave', () => {
+        if (this.viewMode !== mode.id) {
+          btn.style.backgroundColor = 'var(--gray-100)';
+          btn.style.color = isDarkMode ? 'var(--gray-800)' : 'var(--gray-800)';
+        }
+      });
+      
       btn.addEventListener('click', () => {
         this.viewMode = mode.id;
-        document.querySelectorAll('.view-mode-btn').forEach(b => b.classList.remove('active'));
+        
+        // Update all buttons
+        document.querySelectorAll('.view-mode-btn').forEach(b => {
+          b.classList.remove('active');
+          b.style.backgroundColor = 'var(--gray-100)';
+          b.style.borderColor = 'var(--gray-300)';
+          b.style.color = isDarkMode ? 'var(--gray-800)' : 'var(--gray-800)';
+        });
+        
+        // Style active button
         btn.classList.add('active');
+        btn.style.backgroundColor = 'var(--primary)';
+        btn.style.borderColor = 'var(--primary-dark)';
+        btn.style.color = 'white';
+        
         this.renderCalendar();
       });
+      
       viewModeContainer.appendChild(btn);
     });
     
@@ -302,6 +344,32 @@ const Calendar = {
     // Replace blockDateBtn with new event button
     const blockDateBtn = document.getElementById('blockDateBtn');
     blockDateBtn.parentNode.insertBefore(newEventBtn, blockDateBtn);
+    
+    // Register theme change listener to update button styles
+    document.getElementById('darkModeToggle').addEventListener('click', () => {
+      // Wait for theme change to complete
+      setTimeout(() => this.updateViewModeButtonStyles(), 100);
+    });
+  },
+  
+  // Update view mode button styles when theme changes
+  updateViewModeButtonStyles() {
+    const isDarkMode = !document.body.classList.contains('light-mode');
+    const buttons = document.querySelectorAll('.view-mode-btn');
+    
+    buttons.forEach(btn => {
+      const isActive = btn.classList.contains('active');
+      
+      if (isActive) {
+        btn.style.backgroundColor = 'var(--primary)';
+        btn.style.borderColor = 'var(--primary-dark)';
+        btn.style.color = 'white';
+      } else {
+        btn.style.backgroundColor = 'var(--gray-100)';
+        btn.style.borderColor = 'var(--gray-300)';
+        btn.style.color = isDarkMode ? 'var(--gray-800)' : 'var(--gray-800)';
+      }
+    });
   },
   
   // Set up date validation for the form
@@ -635,11 +703,37 @@ const Calendar = {
       });
     }
     
-    // If blocked for the whole day, show reason
+    // If blocked for the whole day, show reason and add unblock option
     if (this.blockedDates[dateStr]) {
       const blockedReason = document.createElement('div');
       blockedReason.className = 'event-indicator blocked-event';
       blockedReason.textContent = this.blockedDates[dateStr] || 'Unavailable';
+      
+      // Add unblock icon
+      const unblockIcon = document.createElement('i');
+      unblockIcon.className = 'fas fa-unlock unblock-icon';
+      unblockIcon.style.cssText = `
+        position: absolute;
+        right: 4px;
+        top: 4px;
+        font-size: 0.7rem;
+        color: var(--danger);
+        cursor: pointer;
+        opacity: 0.7;
+      `;
+      unblockIcon.title = 'Unblock this date';
+      
+      // Add event listener for unblocking
+      unblockIcon.addEventListener('click', (e) => {
+        e.stopPropagation();
+        if (confirm(`Unblock date ${dateStr}?`)) {
+          delete this.blockedDates[dateStr];
+          this.saveAvailability();
+          this.renderCalendar();
+        }
+      });
+      
+      blockedReason.appendChild(unblockIcon);
       dayContent.appendChild(blockedReason);
     }
     
@@ -1664,8 +1758,100 @@ const Calendar = {
   
   // Show event details
   showEventDetails(event) {
-    // Show in edit mode
+    // For booked events, add option to cancel booking
+    if (event.type === 'booked') {
+      // Create a custom modal for booking details with cancel option
+      this.showBookingDetailsModal(event);
+      return;
+    }
+    
+    // For regular events, show in edit mode
     this.showEventModal(new Date(event.date), event);
+  },
+  
+  // Show booking details modal with cancel option
+  showBookingDetailsModal(event) {
+    // Create modal if it doesn't exist
+    if (!this.bookingDetailsModal) {
+      this.createBookingDetailsModal();
+    }
+    
+    const modal = this.bookingDetailsModal;
+    const modalContent = modal.querySelector('.modal-content');
+    
+    // Format dates
+    const date = new Date(event.date);
+    const formatOptions = { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' };
+    const formattedDate = date.toLocaleDateString('en-US', formatOptions);
+    
+    // Get client data if available
+    const clientData = event.clientData || {};
+    
+    // Update modal title and content
+    modalContent.querySelector('.modal-title').textContent = `Booking Details: ${event.title}`;
+    
+    const detailsContent = modalContent.querySelector('.booking-details-content');
+    detailsContent.innerHTML = `
+      <div class="booking-detail-row">
+        <div class="booking-detail-label">Client:</div>
+        <div class="booking-detail-value">${clientData.clientName || event.title}</div>
+      </div>
+      <div class="booking-detail-row">
+        <div class="booking-detail-label">Project:</div>
+        <div class="booking-detail-value">${clientData.projectName || event.description || 'Unnamed Project'}</div>
+      </div>
+      ${clientData.projectLocation ? `
+      <div class="booking-detail-row">
+        <div class="booking-detail-label">Location:</div>
+        <div class="booking-detail-value">${clientData.projectLocation}</div>
+      </div>
+      ` : ''}
+      <div class="booking-detail-row">
+        <div class="booking-detail-label">Date:</div>
+        <div class="booking-detail-value">${formattedDate}</div>
+      </div>
+      <div class="booking-detail-row">
+        <div class="booking-detail-label">Time:</div>
+        <div class="booking-detail-value">
+          ${event.fullDay ? 'All Day' : `${event.startTime} - ${event.endTime}`}
+        </div>
+      </div>
+      <div class="booking-detail-row">
+        <div class="booking-detail-label">Status:</div>
+        <div class="booking-detail-value">
+          <span class="badge ${clientData.depositPaid ? 'badge-success' : 'badge-primary'}">
+            ${clientData.depositPaid ? 'Deposit Paid' : 'Confirmed'}
+          </span>
+        </div>
+      </div>
+      ${event.description ? `
+      <div class="booking-detail-row">
+        <div class="booking-detail-label">Notes:</div>
+        <div class="booking-detail-value">${event.description}</div>
+      </div>
+      ` : ''}
+    `;
+    
+    // Store event data in modal for reference in cancel function
+    modal.dataset.eventId = event.id;
+    modal.dataset.eventDate = event.date;
+    
+    // Show the cancel button
+    const cancelBtn = modalContent.querySelector('#cancelBookingBtn');
+    cancelBtn.style.display = 'inline-block';
+    
+    // Also show edit button
+    const editBtn = modalContent.querySelector('#editBookingBtn');
+    if (editBtn) {
+      editBtn.style.display = 'inline-block';
+      editBtn.addEventListener('click', () => {
+        modal.style.display = 'none';
+        this.showEventModal(new Date(event.date), event);
+      });
+    }
+    
+    // Show the modal
+    modal.style.display = 'flex';
   },
   
   // Show block date modal
