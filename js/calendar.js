@@ -1,4 +1,56 @@
-// Drag and drop event handlers
+// Set up drag and drop interactions for calendar events
+  setupDragAndDrop() {
+    if (typeof interact === 'undefined') return;
+    
+    // Make events draggable
+    interact('.event-indicator, .time-event, .all-day-event, .day-time-event, .full-day-event')
+      .draggable({
+        inertia: true,
+        modifiers: [
+          interact.modifiers.restrictRect({
+            restriction: 'parent',
+            endOnly: true
+          })
+        ],
+        autoScroll: true,
+        listeners: {
+          start: event => this.handleDragStart(event),
+          move: event => this.handleDragMove(event),
+          end: event => this.handleDragEnd(event)
+        }
+      });
+      
+    // Set up drop zones
+    interact('.calendar-day, .hour-cell, .hour-events, .day-column')
+      .dropzone({
+        overlap: 'pointer',
+        ondragenter: event => this.handleDragEnter(event),
+        ondragleave: event => this.handleDragLeave(event),
+        ondrop: event => this.handleDrop(event)
+      });
+      
+    // Add drag and drop styles
+    const dragStyles = document.createElement('style');
+    dragStyles.textContent = `
+      .is-dragging {
+        opacity: 0.8 !important;
+        cursor: grabbing !important;
+      }
+      
+      .drag-ghost {
+        opacity: 0.6;
+        pointer-events: none;
+        z-index: 9999;
+      }
+      
+      .drop-target {
+        background-color: rgba(255, 123, 0, 0.1);
+        border: 2px dashed var(--primary) !important;
+      }
+    `;
+    
+    document.head.appendChild(dragStyles);
+  },  // Handle drag and drop event handlers
   handleDragStart(event) {
     const element = event.target;
     
@@ -30,16 +82,6 @@
     // Store the event ID and original date
     this.draggedEventId = element.dataset.eventId;
     this.draggedEventOriginalDate = element.dataset.originalDate;
-    
-    // Emit a custom event for drag start
-    const dragStartEvent = new CustomEvent('calendar.dragstart', {
-      detail: {
-        eventId: this.draggedEventId,
-        originalDate: this.draggedEventOriginalDate,
-        element: element
-      }
-    });
-    document.dispatchEvent(dragStartEvent);
   },
   
   handleDragMove(event) {
