@@ -83,6 +83,26 @@ const Signature = {
     this.clearCanvas();
     this.hasSigned = false;
     
+    // If signing from history, ensure we have the quote data loaded
+    if (this.quoteIdToSign) {
+      // Find the quote in history
+      const historyItem = History.historyData.find(item => 
+        item.type === 'quote' && item.id === this.quoteIdToSign);
+      
+      if (historyItem && historyItem.quoteData) {
+        // Load this quote data into AppState
+        AppState.quoteData = { ...historyItem.quoteData };
+        AppState.quoteTotal = historyItem.amount;
+        
+        // Calculate deposit amount based on client type
+        const clientType = historyItem.quoteData.clientType || 'regular';
+        AppState.depositPercentage = AppState.rates.depositRates[clientType] || 0.25;
+        AppState.depositAmount = Math.round(AppState.quoteTotal * AppState.depositPercentage);
+        
+        console.log('Loaded quote data into AppState for signing from history');
+      }
+    }
+    
     // Show modal
     this.modal.style.display = 'flex';
     
@@ -445,8 +465,25 @@ const Signature = {
       }
     }
     
-    // Emit an event that the quote was accepted
-    const quoteId = this.quoteIdToSign || (AppState.quoteData ? AppState.quoteData.id : null);
+    // Determine the quote ID to use in the event
+    let quoteId = this.quoteIdToSign;
+    
+    if (!quoteId && AppState.quoteData) {
+      // If we're signing from calculator, find the quote in history
+      // First check if the quote has an ID in AppState
+      if (AppState.quoteData.id) {
+        quoteId = AppState.quoteData.id;
+      } else {
+        // Try to find the most recent unaccepted quote
+        const latestQuote = History.historyData.find(item => 
+          item.type === 'quote' && !item.accepted);
+        
+        if (latestQuote) {
+          quoteId = latestQuote.id;
+        }
+      }
+    }
+    
     if (quoteId) {
       console.log('Preparing to dispatch quoteAccepted event for ID:', quoteId);
       
