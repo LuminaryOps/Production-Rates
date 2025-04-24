@@ -14,95 +14,190 @@
 </head>
 <body>
   <div class="container">
-    <!-- Modified Header Section -->
+    <!-- Technical Production Equipment Header -->
     <div class="header">
-      <div style="display: flex; align-items: center; justify-content: center; margin-bottom: 1rem;">
-        <div style="width: 160px; height: 160px;">
-          <!-- Inline SVG for the atom animation with added text -->
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">
-            <!-- Styling -->
+      <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; margin-bottom: 1rem;">
+        <div style="width: 400px; height: 300px;">
+          <!-- SVG Animation with Production Equipment -->
+          <svg viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg">
             <defs>
-              <radialGradient id="nucleusGradient" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
-                <stop offset="0%" stop-color="#ff9f43" />
-                <stop offset="100%" stop-color="#ff7b00" />
-              </radialGradient>
-              <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
-                <feGaussianBlur stdDeviation="2" result="blur" />
-                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+              <!-- Glow filter -->
+              <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur stdDeviation="3" result="blur"/>
+                <feComposite in="SourceGraphic" in2="blur" operator="over"/>
+              </filter>
+    
+              <!-- Linear gradients -->
+              <linearGradient id="screenGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#1e1e1e"/>
+                <stop offset="100%" stop-color="#121212"/>
+              </linearGradient>
+              <linearGradient id="knobGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#ff7b00"/>
+                <stop offset="100%" stop-color="#e66d00"/>
+              </linearGradient>
+              <linearGradient id="faderGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#ff9f43"/>
+                <stop offset="100%" stop-color="#ff7b00"/>
+              </linearGradient>
+              <linearGradient id="controllerBgGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#1e1e1e"/>
+                <stop offset="100%" stop-color="#333333"/>
+              </linearGradient>
+    
+              <!-- Black grid-line pattern -->
+              <pattern id="pixelGrid" x="0" y="0" width="6" height="6" patternUnits="userSpaceOnUse">
+                <path d="M6 0 L0 0 L0 6" fill="none" stroke="#000" stroke-width="1"/>
+              </pattern>
+    
+              <!-- Clip for the screen -->
+              <clipPath id="screenClip">
+                <rect x="120" y="88" width="160" height="80" rx="5"/>
+              </clipPath>
+    
+              <!-- Inner shadow for fader/knobs -->
+              <filter id="innerShadow" x="-10%" y="-10%" width="120%" height="120%">
+                <feOffset dx="0" dy="1"/>
+                <feGaussianBlur stdDeviation="1" result="offset-blur"/>
+                <feComposite operator="out" in="SourceGraphic" in2="offset-blur" result="inverse"/>
+                <feFlood flood-color="black" flood-opacity="0.4" result="color"/>
+                <feComposite operator="in" in="color" in2="inverse" result="shadow"/>
+                <feComposite operator="over" in="shadow" in2="SourceGraphic"/>
               </filter>
               
-              <!-- Add font styling for the text -->
+              <!-- Text styling -->
               <style type="text/css">
                 @import url('https://fonts.googleapis.com/css2?family=Italiana&display=swap');
                 .logo-text {
                   font-family: 'Italiana', Georgia, serif;
                   font-size: 24px;
-                  letter-spacing: 1px;
+                  letter-spacing: 2px;
                   fill: #ff7b00;
                   filter: url(#glow);
                 }
               </style>
             </defs>
     
-            <!-- Horizontal orbital ellipse -->
-            <ellipse cx="100" cy="100" rx="70" ry="40" 
-                    fill="none" stroke="#ff7b00" stroke-width="1" 
-                    stroke-opacity="0.2" />
-            
-            <!-- Vertical orbital ellipse -->
-            <ellipse cx="100" cy="100" rx="40" ry="70" 
-                    fill="none" stroke="#ff7b00" stroke-width="1" 
-                    stroke-opacity="0.2" />
+            <!-- Dark background -->
+            <rect width="400" height="300" fill="#121212"/>
     
-            <!-- Electrons on horizontal orbit -->
-            <circle cx="170" cy="100" r="4" fill="#ff7b00" filter="url(#glow)">
-              <animateTransform attributeName="transform"
-                              type="rotate"
-                              from="0 100 100"
-                              to="360 100 100"
-                              dur="3s"
-                              repeatCount="indefinite" />
-            </circle>
-            
-            <circle cx="170" cy="100" r="4" fill="#ff7b00" filter="url(#glow)">
-              <animateTransform attributeName="transform"
-                              type="rotate"
-                              from="180 100 100"
-                              to="540 100 100"
-                              dur="3s"
-                              repeatCount="indefinite" />
-            </circle>
+            <!-- Main device -->
+            <g id="rtaDevice">
+              <!-- Body -->
+              <rect x="100" y="80" width="200" height="140" rx="10"
+                    fill="url(#controllerBgGradient)" stroke="#444" stroke-width="2"/>
     
-            <!-- Electrons on vertical orbit -->
-            <circle cx="100" cy="170" r="4" fill="#ff9f43" filter="url(#glow)">
-              <animateTransform attributeName="transform"
-                              type="rotate"
-                              from="90 100 100"
-                              to="450 100 100"
-                              dur="5s"
-                              repeatCount="indefinite" />
-            </circle>
-            
-            <circle cx="100" cy="170" r="4" fill="#ff9f43" filter="url(#glow)">
-              <animateTransform attributeName="transform"
-                              type="rotate"
-                              from="270 100 100"
-                              to="630 100 100"
-                              dur="5s"
-                              repeatCount="indefinite" />
-            </circle>
+              <!-- Screen bezel -->
+              <rect x="120" y="90" width="160" height="80" rx="5"
+                    fill="url(#screenGradient)" stroke="#444"/>
     
-            <!-- Nucleus -->
-            <circle cx="100" cy="100" r="10" fill="url(#nucleusGradient)" filter="url(#glow)">
-              <animate attributeName="r" values="10;12;10" dur="2s" repeatCount="indefinite" />
-            </circle>
+              <!-- Rain effect inside screen -->
+              <g clip-path="url(#screenClip)">
+                <!-- Solid dark background -->
+                <rect x="120" y="88" width="160" height="80" fill="#222"/>
+    
+                <!-- Raindrops -->
+                <g id="rain">
+                  <!-- Drop 1 -->
+                  <rect x="130" y="88" width="4" height="12" rx="1" ry="1" fill="#FFE066" opacity="0.6">
+                    <animate attributeName="y" from="88" to="156" dur="1.2s" repeatCount="indefinite" begin="0s"/>
+                    <animate attributeName="opacity" values="0.6;0;0.6" dur="1.2s" repeatCount="indefinite" begin="0s"/>
+                  </rect>
+                  <!-- Drop 2 -->
+                  <rect x="150" y="88" width="4" height="10" rx="1" ry="1" fill="#FFD230" opacity="0.5">
+                    <animate attributeName="y" from="88" to="158" dur="1.5s" repeatCount="indefinite" begin="0.3s"/>
+                    <animate attributeName="opacity" values="0.5;0;0.5" dur="1.5s" repeatCount="indefinite" begin="0.3s"/>
+                  </rect>
+                  <!-- Drop 3 -->
+                  <rect x="170" y="88" width="4" height="14" rx="1" ry="1" fill="#FFEF99" opacity="0.7">
+                    <animate attributeName="y" from="88" to="154" dur="1.1s" repeatCount="indefinite" begin="0.6s"/>
+                    <animate attributeName="opacity" values="0.7;0;0.7" dur="1.1s" repeatCount="indefinite" begin="0.6s"/>
+                  </rect>
+                  <!-- Drop 4 -->
+                  <rect x="190" y="88" width="4" height="11" rx="1" ry="1" fill="#FFE066" opacity="0.6">
+                    <animate attributeName="y" from="88" to="159" dur="1.3s" repeatCount="indefinite" begin="0.9s"/>
+                    <animate attributeName="opacity" values="0.6;0;0.6" dur="1.3s" repeatCount="indefinite" begin="0.9s"/>
+                  </rect>
+                  <!-- Drop 5 -->
+                  <rect x="210" y="88" width="4" height="12" rx="1" ry="1" fill="#FFD230" opacity="0.5">
+                    <animate attributeName="y" from="88" to="158" dur="1.4s" repeatCount="indefinite" begin="0.2s"/>
+                    <animate attributeName="opacity" values="0.5;0;0.5" dur="1.4s" repeatCount="indefinite" begin="0.2s"/>
+                  </rect>
+                  <!-- Drop 6 -->
+                  <rect x="230" y="88" width="4" height="13" rx="1" ry="1" fill="#FFEF99" opacity="0.7">
+                    <animate attributeName="y" from="88" to="155" dur="1.0s" repeatCount="indefinite" begin="0.5s"/>
+                    <animate attributeName="opacity" values="0.7;0;0.7" dur="1.0s" repeatCount="indefinite" begin="0.5s"/>
+                  </rect>
+                  <!-- Drop 7 -->
+                  <rect x="250" y="88" width="4" height="10" rx="1" ry="1" fill="#FFE066" opacity="0.6">
+                    <animate attributeName="y" from="88" to="158" dur="1.6s" repeatCount="indefinite" begin="0.8s"/>
+                    <animate attributeName="opacity" values="0.6;0;0.6" dur="1.6s" repeatCount="indefinite" begin="0.8s"/>
+                  </rect>
+                </g>
+    
+                <!-- Static black grid overlay -->
+                <rect x="120" y="88" width="160" height="80" fill="url(#pixelGrid)" opacity="0.5"/>
+              </g>
+    
+              <!-- Faders -->
+              <g transform="translate(110,130)">
+                <rect x="-5" y="-30" width="10" height="60" rx="2" fill="#222"/>
+                <rect x="-2" y="-25" width="4" height="50" fill="#444"/>
+                <rect x="-7" y="0" width="14" height="6" rx="2"
+                      fill="url(#faderGradient)" filter="url(#innerShadow)">
+                  <animate attributeName="y" values="-15;10;-15" dur="3.5s" repeatCount="indefinite"/>
+                </rect>
+              </g>
+              <g transform="translate(290,130)">
+                <rect x="-5" y="-30" width="10" height="60" rx="2" fill="#222"/>
+                <rect x="-2" y="-25" width="4" height="50" fill="#444"/>
+                <rect x="-7" y="0" width="14" height="6" rx="2"
+                      fill="url(#faderGradient)" filter="url(#innerShadow)">
+                  <animate attributeName="y" values="5;-20;5" dur="4.2s" repeatCount="indefinite"/>
+                </rect>
+              </g>
+    
+              <!-- Knobs -->
+              <g transform="translate(145,190)">
+                <circle cx="0" cy="0" r="12" fill="#333" stroke="#444"/>
+                <circle cx="0" cy="0" r="10" fill="url(#knobGradient)" filter="url(#innerShadow)"/>
+                <line x1="0" y1="-1" x2="0" y2="-7" stroke="#fff" stroke-width="1.5" stroke-linecap="round">
+                  <animateTransform attributeName="transform" type="rotate"
+                                    from="0 0 0" to="360 0 0" dur="6s" repeatCount="indefinite"/>
+                </line>
+              </g>
+              <g transform="translate(180,190)">
+                <circle cx="0" cy="0" r="12" fill="#333" stroke="#444"/>
+                <circle cx="0" cy="0" r="10" fill="url(#knobGradient)" filter="url(#innerShadow)"/>
+                <line x1="0" y1="-1" x2="0" y2="-7" stroke="#fff" stroke-width="1.5" stroke-linecap="round">
+                  <animateTransform attributeName="transform" type="rotate"
+                                    from="0 0 0" to="-360 0 0" dur="4.5s" repeatCount="indefinite"/>
+                </line>
+              </g>
+              <g transform="translate(215,190)">
+                <circle cx="0" cy="0" r="12" fill="#333" stroke="#444"/>
+                <circle cx="0" cy="0" r="10" fill="url(#knobGradient)" filter="url(#innerShadow)"/>
+                <line x1="0" y1="-1" x2="0" y2="-7" stroke="#fff" stroke-width="1.5" stroke-linecap="round">
+                  <animateTransform attributeName="transform" type="rotate"
+                                    from="0 0 0" to="360 0 0" dur="5.2s" repeatCount="indefinite"/>
+                </line>
+              </g>
+              <g transform="translate(250,190)">
+                <circle cx="0" cy="0" r="12" fill="#333" stroke="#444"/>
+                <circle cx="0" cy="0" r="10" fill="url(#knobGradient)" filter="url(#innerShadow)"/>
+                <line x1="0" y1="-1" x2="0" y2="-7" stroke="#fff" stroke-width="1.5" stroke-linecap="round">
+                  <animateTransform attributeName="transform" type="rotate"
+                                    from="0 0 0" to="-360 0 0" dur="7s" repeatCount="indefinite"/>
+                </line>
+              </g>
+            </g>
             
-            <!-- Added Luminary Ops text -->
-            <text x="100" y="180" class="logo-text" text-anchor="middle">LUMINARY OPS</text>
+            <!-- Added Luminary Ops Text -->
+            <text x="200" y="240" class="logo-text" text-anchor="middle">LUMINARY OPS</text>
           </svg>
         </div>
+        <p class="subtitle">(2025 Rates)</p>
       </div>
-      <p class="subtitle">(2025 Rates)</p>
     </div>
 
     <!-- Tabs -->
