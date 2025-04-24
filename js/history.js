@@ -149,6 +149,17 @@ const History = {
     console.log('Quote accepted event received in History module:', event.detail);
     if (event.detail && event.detail.quoteId) {
       this.updateQuoteAcceptanceStatus(event.detail.quoteId, event.detail.signatureData);
+    } else {
+      console.error('Quote accepted event missing quoteId or signature data');
+      
+      // Fallback: try to find the most recent unaccepted quote
+      const latestQuote = this.historyData.find(item => 
+        item.type === 'quote' && !item.accepted);
+      
+      if (latestQuote && event.detail && event.detail.signatureData) {
+        console.log('Using fallback to update most recent quote:', latestQuote.id);
+        this.updateQuoteAcceptanceStatus(latestQuote.id, event.detail.signatureData);
+      }
     }
   },
   
@@ -304,15 +315,18 @@ const History = {
     const clientName = document.getElementById('clientName').value.trim() || 'Unnamed Client';
     const projectName = document.getElementById('projectName').value.trim() || 'Unnamed Project';
     
+    // Create unique ID for this quote
+    const quoteId = this.generateId();
+    
     // Create history item
     const quoteItem = {
-      id: this.generateId(),
+      id: quoteId,
       type: 'quote',
       client: clientName,
       project: projectName,
       amount: AppState.quoteTotal,
       date: new Date().toISOString(),
-      quoteData: { ...AppState.quoteData },
+      quoteData: { ...AppState.quoteData, id: quoteId }, // Store the ID in the quote data too
       html: document.getElementById('quoteSection').innerHTML,
       accepted: false // New field to track acceptance status
     };
