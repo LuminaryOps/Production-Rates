@@ -1,5 +1,5 @@
 // Set up drag and drop interactions for calendar events
-  setupDragAndDrop() 
+  setupDragAndDrop() {
     if (typeof interact === 'undefined') return;
     
     // Make events draggable
