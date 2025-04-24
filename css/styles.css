@@ -1178,6 +1178,100 @@ input:checked + .slider:before {
   gap: 1rem;
 }
 
+/* History Section Headers */
+.history-section-header {
+  margin-top: 1.5rem;
+  margin-bottom: 1rem;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--gray-300);
+  color: var(--gray-800);
+  position: relative;
+}
+
+.history-section-header h3 {
+  margin-bottom: 0;
+  display: flex;
+  align-items: center;
+  font-size: 1.15rem;
+}
+
+.history-section-header h3:before {
+  content: "";
+  display: inline-block;
+  width: 4px;
+  height: 18px;
+  margin-right: 0.75rem;
+  background-color: var(--primary);
+  border-radius: 2px;
+}
+
+/* History Items - Accepted Quotes */
+.history-item.accepted-quote {
+  border-left: 3px solid var(--success);
+  position: relative;
+  overflow: hidden;
+}
+
+.history-item.accepted-quote::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 5px;
+  background: linear-gradient(to bottom, var(--success), transparent);
+  opacity: 0.6;
+}
+
+/* History Items - Unaccepted Quotes */
+.history-item.unaccepted-quote {
+  border-left: 3px solid var(--primary);
+  position: relative;
+  overflow: hidden;
+}
+
+.history-item.unaccepted-quote::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 5px;
+  background: linear-gradient(to bottom, var(--primary), transparent);
+  opacity: 0.6;
+}
+
+/* History Items - Invoices */
+.history-item.invoice {
+  border-left: 3px solid var(--secondary);
+  position: relative;
+  overflow: hidden;
+}
+
+.history-item.invoice::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 5px;
+  background: linear-gradient(to bottom, var(--secondary), transparent);
+  opacity: 0.6;
+}
+
+/* Signature Indicator for Accepted Quotes */
+.signature-indicator {
+  font-size: 0.75rem;
+  color: var(--success);
+  margin-top: 0.25rem;
+  display: flex;
+  align-items: center;
+}
+
+.signature-indicator i {
+  margin-right: 0.5rem;
+}
+
 /* Light mode styles */
 body.light-mode {
   --primary: #0a84ff;
