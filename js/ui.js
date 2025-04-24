@@ -237,7 +237,10 @@ const UI = {
       const knobGradient = document.getElementById('knobGradient');
       const faderGradient = document.getElementById('faderGradient');
       const controllerBgGradient = document.getElementById('controllerBgGradient');
-      const logoText = document.querySelector('.logo-text');
+      
+      // Get logo text element - make sure we find it within the SVG
+      const logoText = document.querySelector('svg .logo-text');
+      console.log('Logo text element found:', logoText);
       
       // Get rain drops to update their color
       const raindrops = document.querySelectorAll('#rain rect');
@@ -272,9 +275,17 @@ const UI = {
           `;
         }
         
-        // Update logo text color
+        // Update logo text color to blue in light mode
         if (logoText) {
           logoText.setAttribute('fill', '#0a84ff');
+          console.log('Set logo text color to blue');
+        } else {
+          // If we can't find the logo text with the class selector, try a more specific selector
+          const svgText = document.querySelector('svg text[text-anchor="middle"]');
+          if (svgText) {
+            svgText.setAttribute('fill', '#0a84ff');
+            console.log('Set SVG text color to blue using alternate selector');
+          }
         }
         
         // Update device border
@@ -326,9 +337,17 @@ const UI = {
           `;
         }
         
-        // Update logo text color
+        // Update logo text color to orange in dark mode
         if (logoText) {
           logoText.setAttribute('fill', '#ff7b00');
+          console.log('Set logo text color to orange');
+        } else {
+          // If we can't find the logo text with the class selector, try a more specific selector
+          const svgText = document.querySelector('svg text[text-anchor="middle"]');
+          if (svgText) {
+            svgText.setAttribute('fill', '#ff7b00');
+            console.log('Set SVG text color to orange using alternate selector');
+          }
         }
         
         // Update device border
