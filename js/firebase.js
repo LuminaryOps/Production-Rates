@@ -18,12 +18,14 @@ const FirebaseStorage = {
       
       // Initialize Firebase app
       const firebaseConfig = {
-        apiKey: "YOUR_API_KEY_HERE",
-        authDomain: "YOUR_PROJECT_ID.firebaseapp.com",
-        projectId: "YOUR_PROJECT_ID",
-        storageBucket: "YOUR_PROJECT_ID.appspot.com",
-        messagingSenderId: "YOUR_SENDER_ID",
-        appId: "YOUR_APP_ID"
+        apiKey: "AIzaSyDbGQs4You0gE3DQB-a9jOsOm6wniTQ4PA",
+        authDomain: "luminaryops.firebaseapp.com",
+        databaseURL: "https://luminaryops-default-rtdb.firebaseio.com",
+        projectId: "luminaryops",
+        storageBucket: "luminaryops.firebasestorage.app",
+        messagingSenderId: "1042887515037",
+        appId: "1:1042887515037:web:57b98b9ee44c8140732d74",
+        measurementId: "G-6CNGJQ7YC8"
       };
       
       // Initialize Firebase
