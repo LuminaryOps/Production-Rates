@@ -99,6 +99,19 @@ const Signature = {
         AppState.depositPercentage = AppState.rates.depositRates[clientType] || 0.25;
         AppState.depositAmount = Math.round(AppState.quoteTotal * AppState.depositPercentage);
         
+        // Also load project dates if available
+        if (historyItem.quoteData.projectStartDate && historyItem.quoteData.projectEndDate) {
+          AppState.selectedDates = {
+            startDate: historyItem.quoteData.projectStartDate,
+            endDate: historyItem.quoteData.projectEndDate
+          };
+        } else if (historyItem.quoteData.project && historyItem.quoteData.project.startDate && historyItem.quoteData.project.endDate) {
+          AppState.selectedDates = {
+            startDate: historyItem.quoteData.project.startDate,
+            endDate: historyItem.quoteData.project.endDate
+          };
+        }
+        
         console.log('Loaded quote data into AppState for signing from history');
       }
     }
