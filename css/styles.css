@@ -1355,6 +1355,93 @@ body.light-mode {
   display: none !important;
 }
 
+/**
+ * Add these styles to your existing styles.css file
+ * to enhance the display of accepted quotes
+ */
+
+/* Accepted Quote Styling */
+.history-item.accepted-quote {
+  border-left: 3px solid var(--success);
+  box-shadow: var(--shadow), 0 0 5px rgba(52, 199, 89, 0.3);
+}
+
+/* Signature Indicator Styling */
+.signature-indicator {
+  display: flex;
+  align-items: center;
+  font-size: 0.75rem;
+  color: var(--success);
+  margin-top: 0.5rem;
+}
+
+.signature-indicator i {
+  margin-right: 0.5rem;
+}
+
+/* Add a subtle glow to accepted quotes on hover */
+.history-item.accepted-quote:hover {
+  box-shadow: var(--shadow-md), 0 0 8px rgba(52, 199, 89, 0.5);
+}
+
+/* Improve the signature display in the view modal */
+.signature-display {
+  margin-top: 2rem;
+  padding: 1.5rem;
+  border-top: 1px solid var(--gray-300);
+  background-color: var(--gray-100);
+  border-radius: 0.5rem;
+}
+
+.signature-display img {
+  background-color: white;
+  padding: 0.5rem;
+  border: 1px solid var(--gray-300);
+  border-radius: 0.25rem;
+}
+
+/* Success notification for acceptance */
+.acceptance-notification {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  max-width: 400px;
+  z-index: 1000;
+  animation: slideIn 0.3s ease-out;
+  box-shadow: var(--shadow-lg);
+}
+
+/* Fix for history view modal signature display */
+.history-view-modal .signature-display {
+  margin-top: 2rem;
+  padding: 1.5rem;
+  background-color: var(--gray-100);
+  border: 1px solid var(--gray-300);
+  border-radius: var(--border-radius);
+}
+
+/* Fix for accepted quotes section header */
+.history-section-header h3:before {
+  content: "";
+  display: inline-block;
+  width: 4px;
+  height: 18px;
+  margin-right: 0.75rem;
+  border-radius: 2px;
+}
+
+.history-section-header:has(h3:contains("Accepted Quotes")) h3:before {
+  background-color: var(--success);
+}
+
+.history-section-header:has(h3:contains("Unaccepted Quotes")) h3:before {
+  background-color: var(--primary);
+}
+
+.history-section-header:has(h3:contains("Invoices")) h3:before {
+  background-color: var(--secondary);
+}
+
 /* Paid stamp */
 .paid-stamp {
   position: absolute;
