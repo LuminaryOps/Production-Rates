@@ -125,33 +125,88 @@ const History = {
     });
     
     // Listen for signature events to update quote status
-    document.addEventListener('quoteAccepted', (event) => {
-      if (event.detail && event.detail.quoteId) {
-        this.updateQuoteAcceptanceStatus(event.detail.quoteId, event.detail.signatureData);
-      }
-    });
+    this.setupSignatureEventListeners();
+  },
+  
+  // Add a dedicated method for setting up signature event listeners
+  setupSignatureEventListeners() {
+    // Use a bound handler to maintain 'this' context
+    const boundHandler = this.handleQuoteAccepted.bind(this);
+    
+    // Remove any existing listener to avoid duplicates
+    document.removeEventListener('quoteAccepted', boundHandler);
+    
+    // Add the event listener with proper binding
+    document.addEventListener('quoteAccepted', boundHandler);
+    
+    console.log('Signature event listeners set up successfully');
+  },
+  
+  // Add a handler method for the quote accepted event
+  handleQuoteAccepted(event) {
+    console.log('Quote accepted event received in History module:', event.detail);
+    if (event.detail && event.detail.quoteId) {
+      this.updateQuoteAcceptanceStatus(event.detail.quoteId, event.detail.signatureData);
+    }
   },
   
   // Update quote acceptance status when signed
   async updateQuoteAcceptanceStatus(quoteId, signatureData) {
+    console.log('Updating quote acceptance status for ID:', quoteId);
+    
     // Find the quote in history
     const quoteIndex = this.historyData.findIndex(item => 
       item.type === 'quote' && item.id === quoteId);
     
+    console.log('Found quote at index:', quoteIndex);
+    
     if (quoteIndex !== -1) {
+      // Make a deep copy of the signature data to avoid reference issues
+      const signatureDataCopy = JSON.parse(JSON.stringify(signatureData));
+      
       // Update the quote with signature data
       this.historyData[quoteIndex].accepted = true;
-      this.historyData[quoteIndex].signatureData = signatureData;
+      this.historyData[quoteIndex].signatureData = signatureDataCopy;
       this.historyData[quoteIndex].acceptedDate = new Date().toISOString();
+      
+      console.log('Quote updated with signature data:', this.historyData[quoteIndex]);
       
       // Save updated history
       await this.saveHistory();
       
-      // Refresh display if history tab is active
-      if (document.getElementById('history').classList.contains('active')) {
-        this.refreshHistoryDisplay();
-      }
+      // Force refresh display regardless of active tab
+      this.refreshHistoryDisplay();
+      
+      // Show success notification
+      this.showSuccessNotification('Quote marked as accepted');
+    } else {
+      console.error('Unable to find quote with ID:', quoteId);
     }
+  },
+  
+  // Add this method to show notifications
+  showSuccessNotification(message) {
+    const notification = document.createElement('div');
+    notification.className = 'alert alert-success';
+    notification.style.position = 'fixed';
+    notification.style.bottom = '20px';
+    notification.style.right = '20px';
+    notification.style.zIndex = '1000';
+    notification.style.maxWidth = '400px';
+    
+    notification.innerHTML = `
+      <i class="fas fa-check-circle"></i>
+      <div>${message}</div>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    // Remove after 3 seconds
+    setTimeout(() => {
+      notification.style.opacity = '0';
+      notification.style.transition = 'opacity 0.5s';
+      setTimeout(() => notification.remove(), 500);
+    }, 3000);
   },
   
   // Load history from Firebase or localStorage
@@ -402,6 +457,12 @@ const History = {
   renderHistoryItem(container, item) {
     const historyItem = document.createElement('div');
     historyItem.className = 'history-item';
+    
+    // Add specific class for accepted quotes
+    if (item.type === 'quote' && item.accepted) {
+      historyItem.classList.add('accepted-quote');
+    }
+    
     historyItem.style.cssText = `
       background-color: var(--gray-200);
       border-radius: var(--border-radius);
@@ -454,8 +515,8 @@ const History = {
         <div>
           <div style="font-weight: 500; margin-bottom: 0.25rem;">${item.client}</div>
           <div style="font-size: 0.875rem; color: var(--gray-600);">${item.project}</div>
-          ${item.accepted ? `
-          <div style="font-size: 0.75rem; color: var(--success); margin-top: 0.25rem;">
+          ${item.accepted && item.acceptedDate ? `
+          <div style="font-size: 0.75rem; color: var(--success); margin-top: 0.25rem;" class="signature-indicator">
             <i class="fas fa-signature"></i> Signed on ${new Date(item.acceptedDate).toLocaleDateString()}
           </div>
           ` : ''}
