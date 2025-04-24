@@ -16,6 +16,11 @@ const History = {
     
     // Add save handlers to quotes and invoices
     this.setupSaveHandlers();
+    
+    // Explicitly set up signature event listeners to ensure quote acceptance works
+    this.setupSignatureEventListeners();
+    
+    console.log('History module initialized successfully');
   },
   
   // Create history tab and content
@@ -130,14 +135,11 @@ const History = {
   
   // Add a dedicated method for setting up signature event listeners
   setupSignatureEventListeners() {
-    // Use a bound handler to maintain 'this' context
-    const boundHandler = this.handleQuoteAccepted.bind(this);
-    
-    // Remove any existing listener to avoid duplicates
-    document.removeEventListener('quoteAccepted', boundHandler);
+    // First remove any existing listener to avoid duplicates
+    document.removeEventListener('quoteAccepted', this.handleQuoteAccepted);
     
     // Add the event listener with proper binding
-    document.addEventListener('quoteAccepted', boundHandler);
+    document.addEventListener('quoteAccepted', this.handleQuoteAccepted.bind(this));
     
     console.log('Signature event listeners set up successfully');
   },
@@ -403,7 +405,10 @@ const History = {
     
     filteredItems.forEach(item => {
       if (item.type === 'quote') {
-        if (item.accepted) {
+        // Explicitly log the state of each quote for debugging
+        console.log(`Quote ${item.id} for ${item.client}: accepted=${!!item.accepted}`);
+        
+        if (item.accepted === true) {
           groupedItems.acceptedQuotes.push(item);
         } else {
           groupedItems.unacceptedQuotes.push(item);
