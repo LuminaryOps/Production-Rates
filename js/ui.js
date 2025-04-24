@@ -239,6 +239,9 @@ const UI = {
       const controllerBgGradient = document.getElementById('controllerBgGradient');
       const logoText = document.querySelector('.logo-text');
       
+      // Get rain drops to update their color
+      const raindrops = document.querySelectorAll('#rain rect');
+      
       if (isLightMode) {
         // Light mode theme colors
         if (screenGradient) {
@@ -286,6 +289,13 @@ const UI = {
           screenBezel.setAttribute('stroke', '#d1d5db');
         }
         
+        // Update raindrops to blue colors
+        raindrops.forEach((drop, index) => {
+          // Alternate between different blue hues
+          const blueColors = ['#0a84ff', '#5856d6', '#409CFF'];
+          drop.setAttribute('fill', blueColors[index % blueColors.length]);
+        });
+        
       } else {
         // Dark mode (restore original colors)
         if (screenGradient) {
@@ -332,6 +342,12 @@ const UI = {
         if (screenBezel) {
           screenBezel.setAttribute('stroke', '#444');
         }
+        
+        // Restore original raindrop colors
+        const originalColors = ['#FFE066', '#FFD230', '#FFEF99', '#FFE066', '#FFD230', '#FFEF99', '#FFE066'];
+        raindrops.forEach((drop, index) => {
+          drop.setAttribute('fill', originalColors[index % originalColors.length]);
+        });
       }
     }
   },
