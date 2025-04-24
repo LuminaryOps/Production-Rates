@@ -194,6 +194,9 @@ const UI = {
       document.body.classList.remove('light-mode');
       this.elements.darkModeToggle.innerHTML = '<i class="fas fa-sun"></i>';
     }
+    
+    // Update SVG colors when theme is applied
+    this.updateSvgTheme();
   },
   
   // Toggle light/dark theme
@@ -216,6 +219,120 @@ const UI = {
     } else {
       // Save to localStorage
       localStorage.setItem('theme', newTheme);
+    }
+  },
+  
+  // Update SVG colors based on current theme
+  updateSvgTheme() {
+    // Get the current theme state
+    const isLightMode = document.body.classList.contains('light-mode');
+    
+    // Find the SVG elements and update their colors based on theme
+    const svgDefs = document.querySelector('svg defs');
+    
+    // Update gradients and filters for light/dark mode
+    if (svgDefs) {
+      // Get references to all gradient elements
+      const screenGradient = document.getElementById('screenGradient');
+      const knobGradient = document.getElementById('knobGradient');
+      const faderGradient = document.getElementById('faderGradient');
+      const controllerBgGradient = document.getElementById('controllerBgGradient');
+      const logoText = document.querySelector('.logo-text');
+      
+      if (isLightMode) {
+        // Light mode theme colors
+        if (screenGradient) {
+          screenGradient.innerHTML = `
+            <stop offset="0%" stop-color="#f2f4f6"/>
+            <stop offset="100%" stop-color="#e5e7eb"/>
+          `;
+        }
+        
+        if (knobGradient) {
+          knobGradient.innerHTML = `
+            <stop offset="0%" stop-color="#0a84ff"/>
+            <stop offset="100%" stop-color="#0070e0"/>
+          `;
+        }
+        
+        if (faderGradient) {
+          faderGradient.innerHTML = `
+            <stop offset="0%" stop-color="#5856d6"/>
+            <stop offset="100%" stop-color="#0a84ff"/>
+          `;
+        }
+        
+        if (controllerBgGradient) {
+          controllerBgGradient.innerHTML = `
+            <stop offset="0%" stop-color="#ffffff"/>
+            <stop offset="100%" stop-color="#f2f4f6"/>
+          `;
+        }
+        
+        // Update logo text color
+        if (logoText) {
+          logoText.setAttribute('fill', '#0a84ff');
+        }
+        
+        // Update device border
+        const deviceBody = document.querySelector('rect[x="100"][y="80"]');
+        if (deviceBody) {
+          deviceBody.setAttribute('stroke', '#d1d5db');
+        }
+        
+        // Update screen bezel
+        const screenBezel = document.querySelector('rect[x="120"][y="90"]');
+        if (screenBezel) {
+          screenBezel.setAttribute('stroke', '#d1d5db');
+        }
+        
+      } else {
+        // Dark mode (restore original colors)
+        if (screenGradient) {
+          screenGradient.innerHTML = `
+            <stop offset="0%" stop-color="#1e1e1e"/>
+            <stop offset="100%" stop-color="#121212"/>
+          `;
+        }
+        
+        if (knobGradient) {
+          knobGradient.innerHTML = `
+            <stop offset="0%" stop-color="#ff7b00"/>
+            <stop offset="100%" stop-color="#e66d00"/>
+          `;
+        }
+        
+        if (faderGradient) {
+          faderGradient.innerHTML = `
+            <stop offset="0%" stop-color="#ff9f43"/>
+            <stop offset="100%" stop-color="#ff7b00"/>
+          `;
+        }
+        
+        if (controllerBgGradient) {
+          controllerBgGradient.innerHTML = `
+            <stop offset="0%" stop-color="#1e1e1e"/>
+            <stop offset="100%" stop-color="#333333"/>
+          `;
+        }
+        
+        // Update logo text color
+        if (logoText) {
+          logoText.setAttribute('fill', '#ff7b00');
+        }
+        
+        // Update device border
+        const deviceBody = document.querySelector('rect[x="100"][y="80"]');
+        if (deviceBody) {
+          deviceBody.setAttribute('stroke', '#444');
+        }
+        
+        // Update screen bezel
+        const screenBezel = document.querySelector('rect[x="120"][y="90"]');
+        if (screenBezel) {
+          screenBezel.setAttribute('stroke', '#444');
+        }
+      }
     }
   },
   
