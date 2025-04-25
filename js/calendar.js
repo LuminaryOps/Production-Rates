@@ -736,6 +736,10 @@ const Calendar = {
   },
   
   // Create a day element for the month view
+/**
+ * Create a day element for the month view
+ * This is the updated function that properly handles event display
+ */
   createMonthDayElement(date, isInactive) {
     const dayElement = document.createElement('div');
     dayElement.className = 'calendar-day';
@@ -765,32 +769,42 @@ const Calendar = {
     const dayContent = document.createElement('div');
     dayContent.className = 'day-content';
     
-    // Add events for this day
-    if (this.events[dateStr]) {
+    // Add events for this day - IMPROVED FOR CROSS-DEVICE COMPATIBILITY
+    if (this.events[dateStr] && Array.isArray(this.events[dateStr])) {
+      // Log for debugging
+      console.log(`Rendering events for ${dateStr}:`, this.events[dateStr]);
+      
       this.events[dateStr].forEach(event => {
+        if (!event) return; // Skip undefined events
+        
+        // Defensive programming - ensure we have a title
+        const eventTitle = event.title || 'Untitled Event';
+        const eventType = event.type || 'regular';
+        
         // Create event indicator
         const eventIndicator = document.createElement('div');
         eventIndicator.className = 'event-indicator';
         
         // Set event style based on type
-        if (event.type === 'blocked') {
+        if (eventType === 'blocked') {
           eventIndicator.classList.add('blocked-event');
-        } else if (event.type === 'booked') {
+        } else if (eventType === 'booked') {
           eventIndicator.classList.add('booked-event');
         } else {
           eventIndicator.classList.add('regular-event');
         }
         
         // Add time information if not full day
-        const timeInfo = event.fullDay ? 'All day' : `${event.startTime} - ${event.endTime}`;
+        const fullDay = event.fullDay !== undefined ? event.fullDay : true;
+        const timeInfo = fullDay ? 'All day' : `${event.startTime || '00:00'} - ${event.endTime || '23:59'}`;
         
         eventIndicator.innerHTML = `
-          <div class="event-title">${event.title}</div>
+          <div class="event-title">${eventTitle}</div>
           <div class="event-time">${timeInfo}</div>
         `;
         
         // Store event data
-        eventIndicator.dataset.eventId = event.id;
+        eventIndicator.dataset.eventId = event.id || '';
         
         // Add event handler
         eventIndicator.addEventListener('click', (e) => {
