@@ -719,5 +719,53 @@
   <script src="js/pin-auth.js"></script>
   <script src="js/calendar.js"></script>
   <script src="js/app.js"></script>
+  
+  <!-- Calendar Data Repair Script -->
+  <script>
+    // Calendar Data Repair Script
+    document.addEventListener('DOMContentLoaded', async () => {
+      // Wait for AppState to initialize
+      setTimeout(async () => {
+        if (typeof Calendar !== 'undefined' && typeof FirebaseStorage !== 'undefined') {
+          console.log('Running calendar data repair...');
+          
+          // First, verify Firebase connection
+          if (AppState.usingFirebase) {
+            console.log('Firebase is active, running repair process');
+            
+            try {
+              // Clear local storage cache to force fresh data load
+              localStorage.removeItem('calendar');
+              
+              // Wait for the calendar to initialize properly
+              await new Promise(resolve => setTimeout(resolve, 1000));
+              
+              // Run data integrity check
+              await Calendar.ensureDataIntegrity();
+              
+              // Run a verification test to confirm storage/retrieval is working
+              const testResult = await Calendar.testSaveAndLoad();
+              
+              if (testResult) {
+                console.log('Calendar data repair complete - synchronization should work correctly now');
+                
+                // Force a calendar refresh
+                Calendar.renderCalendar();
+                Calendar.renderUpcomingBookings();
+              } else {
+                console.warn('Calendar data repair test failed - manual intervention may be needed');
+              }
+            } catch (error) {
+              console.error('Error in calendar repair process:', error);
+            }
+          } else {
+            console.log('Firebase not active, skipping repair process');
+          }
+        } else {
+          console.warn('Calendar or FirebaseStorage not initialized, cannot run repair');
+        }
+      }, 2000); // Wait for app initialization
+    });
+  </script>
 </body>
 </html>
