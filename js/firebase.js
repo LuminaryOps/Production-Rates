@@ -222,11 +222,13 @@ const FirebaseStorage = {
         return restored;
       } else {
         console.log('No calendar data found in Firebase');
-        return { bookedDates: {}, blockedDates: {} };
+        // The issue is here - we need to include events property in the default return value
+        return { bookedDates: {}, blockedDates: {}, events: {} };
       }
     } catch (error) {
       console.error('Error loading calendar data:', error);
-      return { bookedDates: {}, blockedDates: {} };
+      // Also include events property in the error case
+      return { bookedDates: {}, blockedDates: {}, events: {} };
     }
   },
   
