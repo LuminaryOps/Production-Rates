@@ -41,7 +41,7 @@ const FirebaseStorage = {
     }
   },
   
-  // Convert data to be Firestore-compatible (remove nested arrays)
+  // Convert data to be Firestore-compatible (improved event handling)
   sanitizeDataForFirestore(data) {
     if (!data) return data;
     
@@ -57,35 +57,49 @@ const FirebaseStorage = {
       for (const [key, value] of Object.entries(data)) {
         // Skip html property as it often contains complex structures
         if (key === 'html') {
-          // Store a simplified version instead
           sanitized[key] = typeof value === 'string' ? 
             'HTML content stored separately' : 'Complex content stored separately';
           continue;
         }
         
-        // Special handling for events object to preserve event titles
+        // Special handling for events property
         if (key === 'events') {
-          // Convert events object to a format that preserves structure during serialization
-          const eventsData = {};
+          // Create a deep copy of events with properly sanitized structure
+          const sanitizedEvents = {};
           
-          for (const [dateStr, eventsList] of Object.entries(value)) {
-            if (Array.isArray(eventsList)) {
-              // Ensure each event's title, type, fullDay status is preserved
-              eventsData[dateStr] = eventsList.map(event => ({
-                id: event.id,
-                title: event.title || '',
+          for (const [dateStr, eventList] of Object.entries(value)) {
+            if (Array.isArray(eventList)) {
+              // Sanitize each event in the list, preserving essential properties
+              sanitizedEvents[dateStr] = eventList.map(event => ({
+                id: event.id || `event_${Date.now()}`,
+                date: event.date,
+                title: event.title || 'Untitled Event',
                 description: event.description || '',
                 type: event.type || 'regular',
-                fullDay: !!event.fullDay,
+                fullDay: event.fullDay || false,
                 startTime: event.startTime || '00:00',
                 endTime: event.endTime || '23:59',
-                date: event.date || dateStr,
-                clientData: event.clientData ? JSON.stringify(event.clientData) : null
+                // Simplify clientData to avoid complex nesting
+                clientData: event.clientData ? {
+                  clientName: event.clientData.clientName || '',
+                  projectName: event.clientData.projectName || '',
+                  projectLocation: event.clientData.projectLocation || '',
+                  depositPaid: event.clientData.depositPaid || false,
+                  notes: event.clientData.notes || '',
+                  quoteId: event.clientData.quoteId || '',
+                  travelDays: event.clientData.travelDays || 0,
+                  isTravel: event.clientData.isTravel || false,
+                  travelLabel: event.clientData.travelLabel || '',
+                  projectStartDate: event.clientData.projectStartDate || '',
+                  projectEndDate: event.clientData.projectEndDate || ''
+                } : null
               }));
+            } else {
+              sanitizedEvents[dateStr] = [];
             }
           }
           
-          sanitized[key] = eventsData;
+          sanitized[key] = sanitizedEvents;
           continue;
         }
         
@@ -93,7 +107,12 @@ const FirebaseStorage = {
         if (Array.isArray(value)) {
           // For arrays, stringify them if they contain objects or other arrays
           if (value.some(item => typeof item === 'object' || Array.isArray(item))) {
-            sanitized[key] = JSON.stringify(value);
+            try {
+              sanitized[key] = JSON.stringify(value);
+            } catch (e) {
+              console.error(`Failed to stringify ${key}:`, e);
+              sanitized[key] = JSON.stringify([]);
+            }
           } else {
             sanitized[key] = value;
           }
@@ -147,7 +166,7 @@ const FirebaseStorage = {
     }
   },
   
-  // Restore data from Firestore format
+  // Restore data from Firestore format with improved handling for events
   restoreDataFromFirestore(sanitizedData) {
     if (!sanitizedData) return sanitizedData;
     
@@ -161,25 +180,53 @@ const FirebaseStorage = {
       const restored = { ...sanitizedData };
       
       for (const [key, value] of Object.entries(restored)) {
-        // Special handling for events data
-        if (key === 'events' && value && typeof value === 'object') {
-          // Process each date entry
-          for (const dateStr in value) {
-            if (Array.isArray(value[dateStr])) {
-              // Restore each event in the array
-              value[dateStr] = value[dateStr].map(event => {
-                // Parse clientData if it exists and is a string
-                if (event.clientData && typeof event.clientData === 'string') {
-                  try {
-                    event.clientData = JSON.parse(event.clientData);
-                  } catch (e) {
-                    console.log(`Failed to parse clientData for event ${event.id}, keeping as string`);
-                  }
-                }
-                return event;
+        // Special handling for events object
+        if (key === 'events') {
+          // Ensure each date has a properly structured event array
+          const restoredEvents = {};
+          
+          for (const [dateStr, eventList] of Object.entries(value)) {
+            if (Array.isArray(eventList)) {
+              restoredEvents[dateStr] = eventList.map(event => {
+                // Ensure all event objects have required fields
+                return {
+                  id: event.id || `event_${Date.now()}`,
+                  date: event.date || dateStr,
+                  title: event.title || 'Untitled Event',
+                  description: event.description || '',
+                  type: event.type || 'regular',
+                  fullDay: typeof event.fullDay === 'boolean' ? event.fullDay : false,
+                  startTime: event.startTime || '00:00',
+                  endTime: event.endTime || '23:59',
+                  clientData: event.clientData || null
+                };
               });
+            } else if (typeof eventList === 'string') {
+              // Try to parse stringified event list
+              try {
+                const parsedEventList = JSON.parse(eventList);
+                restoredEvents[dateStr] = Array.isArray(parsedEventList) ? 
+                  parsedEventList.map(event => ({
+                    id: event.id || `event_${Date.now()}`,
+                    date: event.date || dateStr,
+                    title: event.title || 'Untitled Event',
+                    description: event.description || '',
+                    type: event.type || 'regular',
+                    fullDay: typeof event.fullDay === 'boolean' ? event.fullDay : false,
+                    startTime: event.startTime || '00:00',
+                    endTime: event.endTime || '23:59',
+                    clientData: event.clientData || null
+                  })) : [];
+              } catch (e) {
+                console.error(`Failed to parse events for date ${dateStr}:`, e);
+                restoredEvents[dateStr] = [];
+              }
+            } else {
+              restoredEvents[dateStr] = [];
             }
           }
+          
+          restored[key] = restoredEvents;
           continue;
         }
         
@@ -189,7 +236,6 @@ const FirebaseStorage = {
           try {
             restored[key] = JSON.parse(value);
           } catch (e) {
-            // If parsing fails, keep the original string
             console.log(`Failed to parse ${key}, keeping as string`);
           }
         } else if (typeof value === 'object' && value !== null) {
@@ -240,7 +286,7 @@ const FirebaseStorage = {
     }
   },
   
-  // Save calendar availability data
+  // Save calendar availability data with improved event handling
   async saveCalendarData(availability) {
     try {
       if (!this.isInitialized) await this.init();
@@ -248,11 +294,9 @@ const FirebaseStorage = {
       // Convert availability data to be Firestore-compatible
       const sanitizedAvailability = this.sanitizeDataForFirestore(availability);
       
-      // Log the size of data being saved
-      console.log('Calendar data size (approximate):', 
-        JSON.stringify(sanitizedAvailability).length, 'bytes');
+      // Add logging to check what's being saved
+      console.log('Saving calendar data to Firebase:', JSON.stringify(sanitizedAvailability).substring(0, 500) + '...');
       
-      // Save to Firestore
       await this.db.collection('calendar').doc('availability').set(sanitizedAvailability);
       console.log('Calendar data saved to Firebase');
       return true;
@@ -262,7 +306,7 @@ const FirebaseStorage = {
     }
   },
   
-  // Load calendar availability data
+  // Load calendar availability data with improved event handling
   async loadCalendarData() {
     try {
       if (!this.isInitialized) await this.init();
@@ -271,28 +315,25 @@ const FirebaseStorage = {
       if (doc.exists) {
         const sanitizedData = doc.data();
         const restored = this.restoreDataFromFirestore(sanitizedData);
-        console.log('Calendar data loaded from Firebase');
         
-        // Log event data for debugging
-        if (restored.events) {
-          console.log('Number of dates with events:', Object.keys(restored.events).length);
-          Object.keys(restored.events).forEach(dateStr => {
-            console.log(`Date ${dateStr}: ${restored.events[dateStr].length} events`);
-            if (restored.events[dateStr].length > 0) {
-              console.log(`Sample event title: ${restored.events[dateStr][0].title}`);
-            }
-          });
-        }
+        // Add logging to check what was loaded
+        console.log('Calendar data loaded from Firebase:', 
+          JSON.stringify(restored).substring(0, 500) + '...');
+        
+        // Ensure all expected properties exist
+        if (!restored.events) restored.events = {};
+        if (!restored.blockedDates) restored.blockedDates = {};
+        if (!restored.bookedDates) restored.bookedDates = {};
         
         return restored;
       } else {
         console.log('No calendar data found in Firebase');
-        // The issue is here - we need to include events property in the default return value
+        // Include all required properties
         return { bookedDates: {}, blockedDates: {}, events: {} };
       }
     } catch (error) {
       console.error('Error loading calendar data:', error);
-      // Also include events property in the error case
+      // Include all required properties
       return { bookedDates: {}, blockedDates: {}, events: {} };
     }
   },
