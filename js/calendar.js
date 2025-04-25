@@ -27,504 +27,63 @@ const Calendar = {
     // Add validation for date selection in the quote form
     this.setupDateValidation();
     
-    // Initialize drag and drop functionality
-    this.initDragAndDrop();
+    // Drag and drop functionality removed
   },
   
-  // Initialize drag and drop functionality
+  // Initialize drag and drop functionality - disabled
   initDragAndDrop() {
-    // Load the required libraries if not already available
-    if (typeof interact === 'undefined') {
-      const script = document.createElement('script');
-      script.src = 'https://cdn.jsdelivr.net/npm/interactjs@1.10.17/dist/interact.min.js';
-      script.async = true;
-      script.onload = () => {
-        this.setupDragAndDrop();
-        console.log('Drag and drop library loaded');
-      };
-      document.head.appendChild(script);
-    } else {
-      this.setupDragAndDrop();
-    }
+    // Functionality disabled
+    console.log('Drag and drop functionality disabled');
   },
   
-  // Set up drag and drop interactions for calendar events
+  // Set up drag and drop interactions - disabled
   setupDragAndDrop() {
-    if (typeof interact === 'undefined') return;
-    
-    // Make events draggable
-    interact('.event-indicator, .time-event, .all-day-event, .day-time-event, .full-day-event')
-      .draggable({
-        inertia: true,
-        modifiers: [
-          interact.modifiers.restrictRect({
-            restriction: 'parent',
-            endOnly: true
-          })
-        ],
-        autoScroll: true,
-        listeners: {
-          start: event => this.handleDragStart(event),
-          move: event => this.handleDragMove(event),
-          end: event => this.handleDragEnd(event)
-        }
-      });
-      
-    // Set up drop zones
-    interact('.calendar-day, .hour-cell, .hour-events, .day-column')
-      .dropzone({
-        overlap: 'pointer',
-        ondragenter: event => this.handleDragEnter(event),
-        ondragleave: event => this.handleDragLeave(event),
-        ondrop: event => this.handleDrop(event)
-      });
-      
-    // Add drag and drop styles
-    const dragStyles = document.createElement('style');
-    dragStyles.textContent = `
-      .is-dragging {
-        opacity: 0.8 !important;
-        cursor: grabbing !important;
-      }
-      
-      .drag-ghost {
-        opacity: 0.6;
-        pointer-events: none;
-        z-index: 9999;
-      }
-      
-      .drop-target {
-        background-color: rgba(255, 123, 0, 0.1);
-        border: 2px dashed var(--primary) !important;
-      }
-    `;
-    
-    document.head.appendChild(dragStyles);
+    // Functionality disabled
   },
   
-  // Handle drag and drop event handlers
-  handleDragStart(event) {
-    const element = event.target;
-    
-    // Mark the element as being dragged
-    element.classList.add('is-dragging');
-    
-    // Store the original position for reference
-    element.setAttribute('data-x', 0);
-    element.setAttribute('data-y', 0);
-    
-    // Add visual feedback
-    element.style.zIndex = '1000';
-    element.style.cursor = 'grabbing';
-    element.style.opacity = '0.8';
-    element.style.boxShadow = 'var(--shadow-lg)';
-    
-    // Create and show a "ghost" element under the cursor
-    const ghost = element.cloneNode(true);
-    ghost.classList.add('drag-ghost');
-    ghost.style.position = 'fixed';
-    ghost.style.top = '-1000px'; // Hide it initially
-    ghost.style.opacity = '0.6';
-    ghost.style.pointerEvents = 'none';
-    document.body.appendChild(ghost);
-    
-    // Store the ghost element and original event data
-    element.ghostElement = ghost;
-    
-    // Store the event ID and original date
-    this.draggedEventId = element.dataset.eventId;
-    this.draggedEventOriginalDate = element.dataset.originalDate;
+  // Handle drag start event - disabled
+  handleDragStart() {
+    // Functionality disabled
   },
   
-  handleDragMove(event) {
-    const element = event.target;
-    
-    // Update element's position
-    const x = (parseFloat(element.getAttribute('data-x')) || 0) + event.dx;
-    const y = (parseFloat(element.getAttribute('data-y')) || 0) + event.dy;
-    
-    // Apply transform to the dragged element
-    element.style.transform = `translate(${x}px, ${y}px)`;
-    
-    // Update position attributes
-    element.setAttribute('data-x', x);
-    element.setAttribute('data-y', y);
-    
-    // Update ghost element position
-    if (element.ghostElement) {
-      element.ghostElement.style.top = `${event.clientY - 20}px`;
-      element.ghostElement.style.left = `${event.clientX - 20}px`;
-    }
+  // Handle drag move event - disabled
+  handleDragMove() {
+    // Functionality disabled
   },
   
-  handleDragEnd(event) {
-    const element = event.target;
-    
-    // Remove visual feedback
-    element.classList.remove('is-dragging');
-    element.style.zIndex = '';
-    element.style.cursor = '';
-    element.style.opacity = '';
-    element.style.boxShadow = '';
-    
-    // Reset the transform (the actual move happens on drop)
-    element.style.transform = 'translate(0px, 0px)';
-    element.setAttribute('data-x', 0);
-    element.setAttribute('data-y', 0);
-    
-    // Remove ghost element
-    if (element.ghostElement) {
-      element.ghostElement.remove();
-      element.ghostElement = null;
-    }
-    
-    // Reset dragged event tracking if no drop occurred
-    this.draggedEventId = null;
-    this.draggedEventOriginalDate = null;
+  // Handle drag end event - disabled
+  handleDragEnd() {
+    // Functionality disabled
   },
   
-  handleDragEnter(event) {
-    // Highlight the drop target
-    event.target.classList.add('drop-target');
+  // Handle drag enter event - disabled
+  handleDragEnter() {
+    // Functionality disabled
   },
   
-  handleDragLeave(event) {
-    // Remove highlight from drop target
-    event.target.classList.remove('drop-target');
+  // Handle drag leave event - disabled
+  handleDragLeave() {
+    // Functionality disabled
   },
   
-  handleDrop(event) {
-    // Remove highlight from drop target
-    event.target.classList.remove('drop-target');
-    
-    // Find the date from the drop target
-    let targetDateStr = '';
-    let targetHour = null;
-    
-    // Handle different drop zones
-    if (event.target.classList.contains('calendar-day')) {
-      // Get date from day cell in month view
-      const dayNumber = event.target.querySelector('.day-number').textContent;
-      const currentMonth = this.currentDate.getMonth();
-      const currentYear = this.currentDate.getFullYear();
-      
-      // Check if day is from previous/next month
-      const isInactive = event.target.classList.contains('inactive');
-      
-      if (isInactive) {
-        // Determine if this is previous or next month
-        if (parseInt(dayNumber) > 15) {
-          // Previous month (high day number at the start of the grid)
-          const prevMonth = (currentMonth === 0) ? 11 : currentMonth - 1;
-          const prevYear = (currentMonth === 0) ? currentYear - 1 : currentYear;
-          const targetDate = new Date(prevYear, prevMonth, parseInt(dayNumber));
-          targetDateStr = targetDate.toISOString().split('T')[0];
-        } else {
-          // Next month (low day number at the end of the grid)
-          const nextMonth = (currentMonth === 11) ? 0 : currentMonth + 1;
-          const nextYear = (currentMonth === 11) ? currentYear + 1 : currentYear;
-          const targetDate = new Date(nextYear, nextMonth, parseInt(dayNumber));
-          targetDateStr = targetDate.toISOString().split('T')[0];
-        }
-      } else {
-        // Current month
-        const targetDate = new Date(currentYear, currentMonth, parseInt(dayNumber));
-        targetDateStr = targetDate.toISOString().split('T')[0];
-      }
-    } else if (event.target.classList.contains('day-column')) {
-      // Get date from day column in week view
-      targetDateStr = event.target.dataset.date;
-      
-      // Get hour from position
-      const rect = event.target.getBoundingClientRect();
-      const relativeY = event.clientY - rect.top;
-      targetHour = Math.floor(relativeY / 60); // Each hour is 60px
-    } else if (event.target.classList.contains('hour-cell') || event.target.classList.contains('hour-events')) {
-      // Find parent day column to get date
-      let parent = event.target;
-      while (parent && !parent.dataset.date) {
-        parent = parent.parentElement;
-      }
-      
-      if (parent && parent.dataset.date) {
-        targetDateStr = parent.dataset.date;
-        
-        // Find hour from the hour cell
-        const hourCells = Array.from(parent.querySelectorAll('.hour-cell'));
-        const targetCell = event.target.classList.contains('hour-cell') ? 
-                         event.target : 
-                         event.target.closest('.hour-cell');
-                         
-        if (targetCell) {
-          targetHour = hourCells.indexOf(targetCell);
-        }
-      }
-    }
-    
-    // Move the event if we have valid target info
-    if (targetDateStr && this.draggedEventId && this.draggedEventOriginalDate) {
-      this.moveEvent(this.draggedEventId, this.draggedEventOriginalDate, targetDateStr, targetHour);
-    }
-    
-    // Reset dragged event tracking
-    this.draggedEventId = null;
-    this.draggedEventOriginalDate = null;
+  // Handle drop event - disabled
+  handleDrop() {
+    // Functionality disabled
   },
   
-  // Move an event from one date to another
-  moveEvent(eventId, originalDateStr, targetDateStr, targetHour = null) {
-    // Find the event
-    if (!this.events[originalDateStr]) return;
-    
-    const eventIndex = this.events[originalDateStr].findIndex(e => e.id === eventId);
-    if (eventIndex === -1) return;
-    
-    // Get event data
-    const event = { ...this.events[originalDateStr][eventIndex] };
-    
-    // Special handling for travel days and related bookings
-    if (event.type === 'booked') {
-      // Ask for confirmation for moving booked events
-      if (!confirm(`Are you sure you want to move this booking to ${targetDateStr}?`)) {
-        return;
-      }
-      
-      // Check if this is a travel day or main booking
-      if (event.clientData) {
-        const isTravel = event.clientData.isTravel;
-        
-        if (isTravel) {
-          // This is a travel day, ask if user wants to:
-          // 1. Move just this travel day
-          // 2. Adjust all travel days
-          const choice = confirm('Is this a travel day adjustment?\n\nClick OK to only move this travel day.\nClick Cancel to see more options.');
-          
-          if (!choice) {
-            const updateAll = confirm('Would you like to adjust all travel days for this booking?');
-            if (updateAll) {
-              // Find all related events with the same booking info
-              this.updateAllTravelDays(event.clientData, originalDateStr, targetDateStr);
-              return;
-            }
-          }
-        } else {
-          // This is a main booking day
-          const adjustTravel = confirm('Do you want to adjust travel days as well?');
-          if (adjustTravel) {
-            // Find the booking date range and travel days
-            this.updateBookingWithTravel(event, originalDateStr, targetDateStr);
-            return;
-          }
-        }
-      }
-    }
-    
-    // Update event date
-    event.date = targetDateStr;
-    
-    // If hour is specified and this isn't a full day event, update time
-    if (targetHour !== null && !event.fullDay) {
-      // Update start and end times based on target hour
-      const startHour = targetHour;
-      const endHour = Math.min(startHour + 1, 23); // Ensure we don't go past midnight
-      
-      event.startTime = `${startHour.toString().padStart(2, '0')}:00`;
-      event.endTime = `${endHour.toString().padStart(2, '0')}:00`;
-    }
-    
-    // Remove from original date
-    this.events[originalDateStr] = this.events[originalDateStr].filter(e => e.id !== eventId);
-    
-    // Remove original date array if empty
-    if (this.events[originalDateStr].length === 0) {
-      delete this.events[originalDateStr];
-    }
-    
-    // Add to target date
-    if (!this.events[targetDateStr]) {
-      this.events[targetDateStr] = [];
-    }
-    
-    // Add event to target date
-    this.events[targetDateStr].push(event);
-    
-    // Save changes
-    this.saveAvailability();
-    
-    // Refresh calendar
-    this.renderCalendar();
-    this.renderUpcomingBookings();
-    
-    // Show confirmation
-    this.showMoveConfirmation(event.title, originalDateStr, targetDateStr);
+  // Move an event from one date to another - disabled
+  moveEvent() {
+    // Functionality disabled
   },
   
-  // Update all travel days for a booking
-  updateAllTravelDays(clientData, originalDateStr, targetDateStr) {
-    // Find all related events with the same client data
-    const relatedEvents = [];
-    
-    Object.keys(this.events).forEach(dateStr => {
-      this.events[dateStr].forEach(event => {
-        if (event.type === 'booked' && event.clientData) {
-          // Check if this is the same booking
-          if (event.clientData.projectStartDate === clientData.projectStartDate &&
-              event.clientData.projectEndDate === clientData.projectEndDate) {
-            relatedEvents.push({
-              dateStr,
-              event
-            });
-          }
-        }
-      });
-    });
-    
-    // Calculate the date difference for the move
-    const originalDate = new Date(originalDateStr);
-    const targetDate = new Date(targetDateStr);
-    const dateDiff = (targetDate - originalDate) / (1000 * 60 * 60 * 24); // Convert to days
-    
-    if (confirm(`This will adjust all ${relatedEvents.length} events for this booking by ${dateDiff} days. Continue?`)) {
-      // Move each related event
-      relatedEvents.forEach(({ dateStr, event }) => {
-        // Remove from original date
-        this.events[dateStr] = this.events[dateStr].filter(e => e.id !== event.id);
-        
-        // Remove original date array if empty
-        if (this.events[dateStr].length === 0) {
-          delete this.events[dateStr];
-        }
-        
-        // Calculate new date
-        const currentDate = new Date(dateStr);
-        currentDate.setDate(currentDate.getDate() + dateDiff);
-        const newDateStr = currentDate.toISOString().split('T')[0];
-        
-        // Update event date
-        event.date = newDateStr;
-        
-        // Add to new date
-        if (!this.events[newDateStr]) {
-          this.events[newDateStr] = [];
-        }
-        
-        this.events[newDateStr].push(event);
-      });
-      
-      // Update the client data date range
-      const startDate = new Date(clientData.projectStartDate);
-      const endDate = new Date(clientData.projectEndDate);
-      
-      startDate.setDate(startDate.getDate() + dateDiff);
-      endDate.setDate(endDate.getDate() + dateDiff);
-      
-      const newStartDateStr = startDate.toISOString().split('T')[0];
-      const newEndDateStr = endDate.toISOString().split('T')[0];
-      
-      // Update all event client data
-      Object.keys(this.events).forEach(dateStr => {
-        this.events[dateStr].forEach(event => {
-          if (event.type === 'booked' && event.clientData &&
-              event.clientData.projectStartDate === clientData.projectStartDate &&
-              event.clientData.projectEndDate === clientData.projectEndDate) {
-            
-            event.clientData.projectStartDate = newStartDateStr;
-            event.clientData.projectEndDate = newEndDateStr;
-          }
-        });
-      });
-      
-      // Save changes
-      this.saveAvailability();
-      
-      // Refresh calendar
-      this.renderCalendar();
-      this.renderUpcomingBookings();
-      
-      // Show confirmation
-      alert(`Booking successfully moved by ${dateDiff} days`);
-    }
+  // Update all travel days for a booking - disabled
+  updateAllTravelDays() {
+    // Functionality disabled
   },
   
-  // Update a booking and its travel days
-  updateBookingWithTravel(event, originalDateStr, targetDateStr) {
-    if (!event.clientData) return;
-    
-    // Calculate date difference
-    const originalDate = new Date(originalDateStr);
-    const targetDate = new Date(targetDateStr);
-    const dateDiff = (targetDate - originalDate) / (1000 * 60 * 60 * 24); // Convert to days
-    
-    // Find the original booking date range
-    const startDate = new Date(event.clientData.projectStartDate);
-    const endDate = new Date(event.clientData.projectEndDate);
-    
-    // Calculate new date range
-    startDate.setDate(startDate.getDate() + dateDiff);
-    endDate.setDate(endDate.getDate() + dateDiff);
-    
-    const newStartDateStr = startDate.toISOString().split('T')[0];
-    const newEndDateStr = endDate.toISOString().split('T')[0];
-    
-    // Confirm with user
-    if (confirm(`Update booking from ${event.clientData.projectStartDate} - ${event.clientData.projectEndDate} to ${newStartDateStr} - ${newEndDateStr}?`)) {
-      // Find all events in this booking
-      const relatedEvents = [];
-      
-      Object.keys(this.events).forEach(dateStr => {
-        this.events[dateStr].forEach(e => {
-          if (e.type === 'booked' && e.clientData &&
-              e.clientData.projectStartDate === event.clientData.projectStartDate &&
-              e.clientData.projectEndDate === event.clientData.projectEndDate) {
-            
-            relatedEvents.push({
-              dateStr,
-              event: e
-            });
-          }
-        });
-      });
-      
-      // Move each related event
-      relatedEvents.forEach(({ dateStr, event }) => {
-        // Remove from original date
-        this.events[dateStr] = this.events[dateStr].filter(e => e.id !== event.id);
-        
-        // Remove original date array if empty
-        if (this.events[dateStr].length === 0) {
-          delete this.events[dateStr];
-        }
-        
-        // Calculate new date
-        const currentDate = new Date(dateStr);
-        currentDate.setDate(currentDate.getDate() + dateDiff);
-        const newDateStr = currentDate.toISOString().split('T')[0];
-        
-        // Update event date
-        event.date = newDateStr;
-        
-        // Update client data
-        event.clientData.projectStartDate = newStartDateStr;
-        event.clientData.projectEndDate = newEndDateStr;
-        
-        // Add to new date
-        if (!this.events[newDateStr]) {
-          this.events[newDateStr] = [];
-        }
-        
-        this.events[newDateStr].push(event);
-      });
-      
-      // Save changes
-      this.saveAvailability();
-      
-      // Refresh calendar
-      this.renderCalendar();
-      this.renderUpcomingBookings();
-      
-      // Show confirmation
-      alert(`Booking successfully moved to ${newStartDateStr} - ${newEndDateStr}`);
-    }
+  // Update a booking and its travel days - disabled
+  updateBookingWithTravel() {
+    // Functionality disabled
   },
   
   // Show confirmation after moving an event
@@ -1939,7 +1498,16 @@ const Calendar = {
     
     // Set date
     form.querySelector('#eventDate').value = dateStr;
+    
+    // Make date picker visible for editing
+    form.querySelector('#eventDate').style.display = isEditing ? 'block' : 'none';
+    
     form.querySelector('#eventDateDisplay').textContent = formattedDate;
+    
+    // Add label for date picker when editing
+    if (isEditing) {
+      form.querySelector('#eventDateDisplay').innerHTML += '<br><small style="font-weight: normal; color: var(--primary);">You can change the date below:</small>';
+    }
     
     // Set event type
     const eventType = form.querySelector('#eventType');
@@ -2062,7 +1630,11 @@ const Calendar = {
       
       <div style="margin-bottom: 1.5rem;">
         <div id="eventDateDisplay" style="font-weight: 500; margin-bottom: 0.5rem;"></div>
-        <input type="date" id="eventDate" style="display: none;">
+        <!-- Make date input visible as a form control -->
+        <div class="form-group">
+          <label for="eventDate">Change Date (when editing)</label>
+          <input type="date" id="eventDate" style="display: none;">
+        </div>
       </div>
       
       <div class="form-group">
@@ -2217,6 +1789,31 @@ const Calendar = {
         return false;
       }
     }
+
+    // Check if we're editing an existing event
+    const existingEventId = form.querySelector('#eventId').value;
+    let oldDateStr = null;
+    
+    if (existingEventId) {
+      // Find the existing event's date
+      for (const date in this.events) {
+        const eventIndex = this.events[date].findIndex(e => e.id === existingEventId);
+        if (eventIndex !== -1) {
+          oldDateStr = date;
+          break;
+        }
+      }
+      
+      // If found and the date is different, remove from old date
+      if (oldDateStr && oldDateStr !== dateStr) {
+        this.events[oldDateStr] = this.events[oldDateStr].filter(e => e.id !== existingEventId);
+        
+        // Remove empty date array
+        if (this.events[oldDateStr].length === 0) {
+          delete this.events[oldDateStr];
+        }
+      }
+    }
     
     // If blocked, update blocked dates
     if (eventType === 'blocked' && fullDay) {
@@ -2240,7 +1837,7 @@ const Calendar = {
       }
       
       // Check if editing existing event
-      const existingIndex = this.events[dateStr].findIndex(e => e.id === eventId);
+      const existingIndex = this.events[dateStr]?.findIndex(e => e.id === eventId);
       
       if (existingIndex !== -1) {
         // Update existing event
