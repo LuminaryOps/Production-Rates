@@ -17,20 +17,29 @@ const Calendar = {
   viewMode: 'month', // 'month', 'week', or 'day'
   
   // Initialize calendar module
-  init() {
-    this.loadAvailability();
-    this.createCalendarTab();
-    this.setupEventListeners();
-    this.renderCalendar();
-    this.renderUpcomingBookings();
-    
-    // Add validation for date selection in the quote form
-    this.setupDateValidation();
-    
-    // Run data integrity checks
-    this.ensureDataIntegrity();
-    
-    console.log('Calendar initialized with data integrity checks.');
+  async init() {
+    try {
+      await this.loadAvailability();
+      this.createCalendarTab();
+      this.setupEventListeners();
+      this.renderCalendar();
+      this.renderUpcomingBookings();
+      
+      // Add validation for date selection in the quote form
+      this.setupDateValidation();
+      
+      // Run data integrity checks
+      await this.ensureDataIntegrity();
+      
+      console.log('Calendar initialized successfully with data integrity checks.');
+      return true;
+    } catch (error) {
+      console.error('Error initializing calendar:', error);
+      // Still try to render with any available data
+      this.renderCalendar();
+      this.renderUpcomingBookings();
+      return false;
+    }
   },
   
   // Load availability data from Firebase with improved error handling
@@ -65,7 +74,7 @@ const Calendar = {
           };
           
           console.log('Availability data loaded from Firebase successfully');
-          return;
+          return true;
         }
       }
       
@@ -86,7 +95,7 @@ const Calendar = {
           };
           
           console.log('Availability data loaded from localStorage');
-          return;
+          return true;
         } catch (parseError) {
           console.error('Error parsing stored calendar data:', parseError);
         }
@@ -105,6 +114,7 @@ const Calendar = {
       };
       
       console.log('No availability data found, initialized with empty data');
+      return true;
     } catch (error) {
       console.error('Error loading availability data:', error);
       
@@ -119,6 +129,8 @@ const Calendar = {
         bookedDates: this.bookedDates,
         events: this.events
       };
+      
+      return false;
     }
   },
   
@@ -155,6 +167,7 @@ const Calendar = {
       };
       
       console.log('Availability data updated in app state');
+      return true;
     } catch (error) {
       console.error('Error saving availability data:', error);
       
@@ -168,8 +181,10 @@ const Calendar = {
         
         localStorage.setItem('calendar', JSON.stringify(availability));
         console.log('Availability data saved to localStorage (fallback)');
+        return true;
       } catch (localError) {
         console.error('Error saving to localStorage:', localError);
+        return false;
       }
     }
   },
@@ -277,7 +292,7 @@ const Calendar = {
     });
   },
   
-  // Set up event listeners
+  // Set up event listeners and UI controls
   setupEventListeners() {
     // Calendar navigation
     document.getElementById('prevMonth').addEventListener('click', () => {
@@ -302,15 +317,46 @@ const Calendar = {
       this.renderCalendar();
     });
     
-    // Create view mode selector buttons
+    // Create main controls container
+    const calendarControls = document.querySelector('.calendar-controls');
+    
+    // Create the controls wrapper to organize buttons
+    const controlsWrapper = document.createElement('div');
+    controlsWrapper.className = 'calendar-controls-wrapper';
+    controlsWrapper.style.cssText = `
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      width: 100%;
+    `;
+    
+    // Add controls wrapper after the first .row in calendar-controls
+    const firstRow = calendarControls.querySelector('.row');
+    calendarControls.insertBefore(controlsWrapper, firstRow.nextSibling);
+    
+    // Create view mode container
     const viewModeContainer = document.createElement('div');
     viewModeContainer.className = 'view-mode-container';
     viewModeContainer.style.cssText = `
       display: flex;
       gap: 0.5rem;
-      margin-bottom: 1rem;
+      margin-bottom: 0.5rem;
     `;
     
+    // Create action buttons container 
+    const actionButtonsContainer = document.createElement('div');
+    actionButtonsContainer.className = 'action-buttons-container';
+    actionButtonsContainer.style.cssText = `
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    `;
+    
+    // Add these containers to the wrapper
+    controlsWrapper.appendChild(viewModeContainer);
+    controlsWrapper.appendChild(actionButtonsContainer);
+    
+    // Create view mode buttons
     const viewModes = [
       { id: 'month', icon: 'calendar-alt', label: 'Month' },
       { id: 'week', icon: 'calendar-week', label: 'Week' },
@@ -320,6 +366,7 @@ const Calendar = {
     // Determine if we're in dark mode
     const isDarkMode = !document.body.classList.contains('light-mode');
     
+    // Add view mode buttons
     viewModes.forEach(mode => {
       const btn = document.createElement('button');
       btn.className = `view-mode-btn${this.viewMode === mode.id ? ' active' : ''}`;
@@ -382,7 +429,7 @@ const Calendar = {
       viewModeContainer.appendChild(btn);
     });
     
-    // Add "Today" button
+    // Add "Today" button to view mode container
     const todayBtn = document.createElement('button');
     todayBtn.className = 'btn btn-outline btn-sm';
     todayBtn.innerHTML = '<i class="fas fa-calendar-check"></i> Today';
@@ -390,26 +437,86 @@ const Calendar = {
       this.currentDate = new Date();
       this.renderCalendar();
     });
+    viewModeContainer.appendChild(todayBtn);
     
-    // Insert view mode container
-    const calendarControls = document.querySelector('.calendar-controls');
-    calendarControls.querySelector('.row .col:first-child').appendChild(viewModeContainer);
-    calendarControls.querySelector('.month-nav').appendChild(todayBtn);
-    
-    // Action buttons
-    document.getElementById('blockDateBtn').addEventListener('click', this.showBlockDateModal.bind(this));
-    document.getElementById('exportCalendarBtn').addEventListener('click', this.exportCalendar.bind(this));
-    
-    // Add new event button - replaces block date button
+    // Create action buttons
+    // 1. New Event button
     const newEventBtn = document.createElement('button');
     newEventBtn.id = 'newEventBtn';
     newEventBtn.className = 'btn btn-primary btn-sm';
     newEventBtn.innerHTML = '<i class="fas fa-plus"></i> New Event';
     newEventBtn.addEventListener('click', () => this.showEventModal());
+    actionButtonsContainer.appendChild(newEventBtn);
     
-    // Replace blockDateBtn with new event button
-    const blockDateBtn = document.getElementById('blockDateBtn');
-    blockDateBtn.parentNode.insertBefore(newEventBtn, blockDateBtn);
+    // 2. Block Date button
+    const blockDateBtn = document.createElement('button');
+    blockDateBtn.id = 'blockDateBtn';
+    blockDateBtn.className = 'btn btn-outline btn-sm';
+    blockDateBtn.innerHTML = '<i class="fas fa-ban"></i> Block Dates';
+    blockDateBtn.addEventListener('click', this.showBlockDateModal.bind(this));
+    actionButtonsContainer.appendChild(blockDateBtn);
+    
+    // 3. Export Calendar button
+    const exportCalendarBtn = document.createElement('button');
+    exportCalendarBtn.id = 'exportCalendarBtn';
+    exportCalendarBtn.className = 'btn btn-outline btn-sm';
+    exportCalendarBtn.innerHTML = '<i class="fas fa-file-export"></i> Export Calendar';
+    exportCalendarBtn.addEventListener('click', this.exportCalendar.bind(this));
+    actionButtonsContainer.appendChild(exportCalendarBtn);
+    
+    // Remove the original buttons to avoid duplicates
+    const origBlockDateBtn = document.getElementById('blockDateBtn');
+    const origExportCalendarBtn = document.getElementById('exportCalendarBtn');
+    
+    if (origBlockDateBtn && origBlockDateBtn.parentNode) {
+      origBlockDateBtn.parentNode.removeChild(origBlockDateBtn);
+    }
+    
+    if (origExportCalendarBtn && origExportCalendarBtn.parentNode) {
+      origExportCalendarBtn.parentNode.removeChild(origExportCalendarBtn);
+    }
+    
+    // Add responsive styling for mobile
+    const style = document.createElement('style');
+    style.textContent = `
+      @media (max-width: 768px) {
+        .view-mode-container, .action-buttons-container {
+          flex-wrap: wrap;
+          justify-content: center;
+        }
+        
+        .view-mode-btn, .btn-sm {
+          padding: 0.4rem 0.6rem;
+          font-size: 0.75rem;
+          flex-grow: 1;
+          min-width: 80px;
+          max-width: 120px;
+        }
+        
+        .calendar-controls-wrapper {
+          gap: 0.5rem;
+        }
+        
+        .view-mode-container {
+          margin-bottom: 0.25rem;
+        }
+      }
+      
+      @media (max-width: 480px) {
+        .view-mode-btn, .btn-sm {
+          padding: 0.35rem 0.5rem;
+          font-size: 0.7rem;
+          min-width: auto;
+        }
+        
+        .action-buttons-container .btn-sm {
+          flex-basis: calc(50% - 0.25rem);
+          text-align: center;
+          justify-content: center;
+        }
+      }
+    `;
+    document.head.appendChild(style);
     
     // Register theme change listener to update button styles
     document.getElementById('darkModeToggle').addEventListener('click', () => {
@@ -734,7 +841,28 @@ const Calendar = {
     
     // Add events for this day - with improved handling
     if (this.events[dateStr] && Array.isArray(this.events[dateStr])) {
-      this.events[dateStr].forEach(event => {
+      // Sort events by all-day first, then by start time
+      const sortedEvents = [...this.events[dateStr]].sort((a, b) => {
+        // All-day events first
+        if (a.fullDay && !b.fullDay) return -1;
+        if (!a.fullDay && b.fullDay) return 1;
+        
+        // Then by start time
+        if (!a.fullDay && !b.fullDay) {
+          return a.startTime.localeCompare(b.startTime);
+        }
+        
+        return 0;
+      });
+      
+      // Count events for mobile display
+      const eventCount = sortedEvents.length;
+      
+      // Limit events shown for better mobile display (show max 3)
+      const displayLimit = 3;
+      const displayEvents = sortedEvents.slice(0, displayLimit);
+      
+      displayEvents.forEach((event, index) => {
         try {
           // Ensure we have a valid event object with title
           if (!event || typeof event !== 'object') {
@@ -772,6 +900,11 @@ const Calendar = {
             <div class="event-time">${timeInfo}</div>
           `;
           
+          // For mobile, add count indicator to the first event if we're limiting display
+          if (index === 0 && eventCount > displayLimit) {
+            eventIndicator.dataset.count = `+${eventCount - displayLimit}`;
+          }
+          
           // Store event data with fallback ID if needed
           eventIndicator.dataset.eventId = event.id || `event_${Date.now()}`;
           
@@ -786,6 +919,46 @@ const Calendar = {
           console.error('Error rendering event:', error, event);
         }
       });
+      
+      // If there are more events than displayed, add a "more" indicator
+      if (eventCount > displayLimit) {
+        const moreIndicator = document.createElement('div');
+        moreIndicator.className = 'event-more-indicator';
+        moreIndicator.textContent = `+ ${eventCount - displayLimit} more`;
+        moreIndicator.style.cssText = `
+          font-size: 0.7rem;
+          color: var(--gray-600);
+          text-align: center;
+          margin-top: 2px;
+          cursor: pointer;
+        `;
+        
+        // Click to view all events for this day
+        moreIndicator.addEventListener('click', (e) => {
+          e.stopPropagation();
+          // Switch to day view for this date
+          this.currentDate = new Date(date);
+          this.viewMode = 'day';
+          this.renderCalendar();
+          
+          // Update view mode buttons UI
+          document.querySelectorAll('.view-mode-btn').forEach(btn => {
+            if (btn.dataset.mode === 'day') {
+              btn.classList.add('active');
+              btn.style.backgroundColor = 'var(--primary)';
+              btn.style.borderColor = 'var(--primary-dark)';
+              btn.style.color = 'white';
+            } else {
+              btn.classList.remove('active');
+              btn.style.backgroundColor = 'var(--gray-100)';
+              btn.style.borderColor = 'var(--gray-300)';
+              btn.style.color = document.body.classList.contains('light-mode') ? 'var(--gray-800)' : 'var(--gray-800)';
+            }
+          });
+        });
+        
+        dayContent.appendChild(moreIndicator);
+      }
     }
     
     // If blocked for the whole day, show reason and add unblock option
@@ -1085,11 +1258,11 @@ const Calendar = {
         }
         
         .day-column.today {
-          background-color: rgba(255, 123, 0, 0.05);
+          background-color: rgba(var(--primary-rgb, 255, 123, 0), 0.05);
         }
         
         .day-column.blocked {
-          background-color: rgba(255, 59, 48, 0.05);
+          background-color: rgba(var(--danger-rgb, 255, 59, 48), 0.05);
         }
         
         .time-event {
@@ -1124,7 +1297,7 @@ const Calendar = {
           left: 0;
           right: 0;
           bottom: 0;
-          background-color: rgba(255, 59, 48, 0.1);
+          background-color: rgba(var(--danger-rgb, 255, 59, 48), 0.1);
           display: flex;
           align-items: center;
           justify-content: center;
@@ -1137,7 +1310,7 @@ const Calendar = {
         }
         
         .regular-event {
-          background-color: rgba(255, 123, 0, 0.2);
+          background-color: rgba(var(--primary-rgb, 255, 123, 0), 0.2);
           border-left: 3px solid var(--primary);
         }
         
@@ -1147,7 +1320,7 @@ const Calendar = {
         }
         
         .blocked-event {
-          background-color: rgba(255, 59, 48, 0.2);
+          background-color: rgba(var(--danger-rgb, 255, 59, 48), 0.2);
           border-left: 3px solid var(--danger);
         }
         
@@ -1180,7 +1353,7 @@ const Calendar = {
         }
         
         .week-day-header.today {
-          background-color: rgba(255, 123, 0, 0.1);
+          background-color: rgba(var(--primary-rgb, 255, 123, 0), 0.1);
         }
         
         .time-column-header {
@@ -1188,6 +1361,49 @@ const Calendar = {
           border-left: 1px solid var(--gray-300);
           border-right: 1px solid var(--gray-300);
           background-color: var(--gray-200);
+        }
+        
+        @media (max-width: 768px) {
+          .week-container {
+            height: 1000px;
+          }
+          
+          .time-event, .full-day-event {
+            font-size: 0.6rem;
+            padding: 0.15rem;
+          }
+          
+          .event-time {
+            font-size: 0.55rem;
+          }
+        }
+        
+        @media (max-width: 480px) {
+          .time-column, .time-column-header {
+            width: 40px;
+          }
+          
+          .week-container {
+            grid-template-columns: 40px repeat(7, 1fr);
+          }
+          
+          .calendar-header {
+            grid-template-columns: 40px repeat(7, 1fr);
+          }
+          
+          .time-column .hour-cell {
+            padding-right: 0.25rem;
+            font-size: 0.6rem;
+          }
+          
+          .week-day-header {
+            padding: 0.25rem;
+            font-size: 0.75rem;
+          }
+          
+          .week-day-header .day-number {
+            font-size: 0.9rem;
+          }
         }
       `;
       
@@ -1462,11 +1678,11 @@ const Calendar = {
         }
         
         .blocked-day .hour-events {
-          background-color: rgba(255, 59, 48, 0.05);
+          background-color: rgba(var(--danger-rgb, 255, 59, 48), 0.05);
         }
         
         .regular-event {
-          background-color: rgba(255, 123, 0, 0.2);
+          background-color: rgba(var(--primary-rgb, 255, 123, 0), 0.2);
           border-left: 3px solid var(--primary);
         }
         
@@ -1476,7 +1692,7 @@ const Calendar = {
         }
         
         .blocked-event {
-          background-color: rgba(255, 59, 48, 0.2);
+          background-color: rgba(var(--danger-rgb, 255, 59, 48), 0.2);
           border-left: 3px solid var(--danger);
         }
         
@@ -1484,6 +1700,50 @@ const Calendar = {
           font-size: 0.75rem;
           margin-top: 0.25rem;
           opacity: 0.8;
+        }
+        
+        @media (max-width: 768px) {
+          .day-time-grid {
+            height: 1000px;
+          }
+          
+          .all-day-label {
+            width: 60px;
+            font-size: 0.75rem;
+          }
+          
+          .hour-label {
+            width: 60px;
+            font-size: 0.7rem;
+          }
+          
+          .day-time-event {
+            font-size: 0.75rem;
+            padding: 0.25rem;
+          }
+          
+          .event-description {
+            font-size: 0.65rem;
+          }
+        }
+        
+        @media (max-width: 480px) {
+          .all-day-label {
+            width: 50px;
+            font-size: 0.7rem;
+            padding: 0.25rem;
+          }
+          
+          .hour-label {
+            width: 50px;
+            font-size: 0.65rem;
+            padding: 0 0.25rem;
+          }
+          
+          .all-day-event {
+            font-size: 0.8rem;
+            padding: 0.35rem;
+          }
         }
       `;
       
@@ -2035,7 +2295,13 @@ const Calendar = {
     const editBtn = modalContent.querySelector('#editBookingBtn');
     if (editBtn) {
       editBtn.style.display = 'inline-block';
-      editBtn.addEventListener('click', () => {
+      
+      // Remove previous event listeners
+      const newEditBtn = editBtn.cloneNode(true);
+      editBtn.parentNode.replaceChild(newEditBtn, editBtn);
+      
+      // Add event listener
+      newEditBtn.addEventListener('click', () => {
         modal.style.display = 'none';
         this.showEventModal(new Date(event.date), event);
       });
@@ -2212,6 +2478,7 @@ const Calendar = {
       right: 20px;
       max-width: 400px;
       z-index: 1000;
+      animation: slideIn 0.3s ease-out;
     `;
     
     notification.innerHTML = `
@@ -2470,8 +2737,8 @@ const Calendar = {
       return;
     }
     
-    // Add events to list
-    upcomingEvents.forEach(event => {
+    // Add events to list (limit to 10 for performance)
+    upcomingEvents.slice(0, 10).forEach(event => {
       try {
         const eventItem = document.createElement('div');
         eventItem.className = 'booking-item';
@@ -2526,60 +2793,328 @@ const Calendar = {
       }
     });
     
-    // Add custom styles for booking items
+    // Add "View all" link if more than 10 events
+    if (upcomingEvents.length > 10) {
+      const viewAllItem = document.createElement('div');
+      viewAllItem.className = 'view-all-item';
+      viewAllItem.innerHTML = `
+        <button class="btn btn-outline btn-sm" style="width: 100%; margin-top: 0.5rem;">
+          <i class="fas fa-list"></i> View all ${upcomingEvents.length} upcoming events
+        </button>
+      `;
+      
+      // Add click handler to show all events modal
+      viewAllItem.querySelector('button').addEventListener('click', () => {
+        this.showAllEventsModal(upcomingEvents);
+      });
+      
+      upcomingBookingsList.appendChild(viewAllItem);
+    }
+    
+    // Add custom styles for booking items if not already added
+    if (!document.getElementById('upcoming-bookings-styles')) {
+      const style = document.createElement('style');
+      style.id = 'upcoming-bookings-styles';
+      style.textContent = `
+        .booking-item {
+          display: flex;
+          justify-content: space-between;
+          padding: 1rem;
+          border-radius: 8px;
+          background-color: var(--gray-100);
+          margin-bottom: 0.75rem;
+          transition: all 0.2s;
+          border-left: 3px solid var(--primary);
+          cursor: pointer;
+        }
+        
+        .booking-item:hover {
+          transform: translateY(-2px);
+          box-shadow: var(--shadow-sm);
+        }
+        
+        .booking-item.booked-item {
+          border-left: 3px solid #007aff;
+        }
+        
+        .booking-item.blocked-item {
+          border-left: 3px solid var(--danger);
+        }
+        
+        .booking-dates {
+          font-weight: 500;
+          margin-bottom: 0.25rem;
+        }
+        
+        .booking-client {
+          font-size: 0.875rem;
+          color: var(--gray-800);
+        }
+        
+        .booking-time {
+          font-size: 0.75rem;
+          color: var(--gray-600);
+          margin-top: 0.25rem;
+        }
+        
+        .booking-status {
+          display: flex;
+          align-items: center;
+        }
+        
+        .view-all-item {
+          text-align: center;
+          margin-top: 0.5rem;
+        }
+        
+        @media (max-width: 480px) {
+          .booking-item {
+            padding: 0.8rem;
+          }
+          
+          .booking-client {
+            font-size: 0.8rem;
+          }
+          
+          .booking-time {
+            font-size: 0.7rem;
+          }
+          
+          .booking-status .badge {
+            font-size: 0.7rem;
+            padding: 0.2rem 0.5rem;
+          }
+        }
+      `;
+      
+      document.head.appendChild(style);
+    }
+  },
+  
+  // Show all events modal
+  showAllEventsModal(events) {
+    // Create modal
+    const modal = document.createElement('div');
+    modal.className = 'all-events-modal';
+    modal.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(0, 0, 0, 0.7);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      padding: 1rem;
+    `;
+    
+    // Create modal content
+    const content = document.createElement('div');
+    content.className = 'modal-content';
+    content.style.cssText = `
+      background-color: var(--card-bg);
+      border-radius: var(--border-radius);
+      box-shadow: var(--shadow-lg);
+      width: 100%;
+      max-width: 700px;
+      max-height: 90vh;
+      overflow-y: auto;
+      padding: 2rem;
+      position: relative;
+    `;
+    
+    // Add close button
+    const closeBtn = document.createElement('div');
+    closeBtn.className = 'modal-close';
+    closeBtn.innerHTML = '<i class="fas fa-times"></i>';
+    closeBtn.style.cssText = `
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      cursor: pointer;
+      font-size: 1.25rem;
+      color: var(--gray-500);
+    `;
+    closeBtn.addEventListener('click', () => {
+      modal.remove();
+    });
+    
+    // Add title
+    const title = document.createElement('h3');
+    title.textContent = 'All Upcoming Events';
+    title.style.marginBottom = '1.5rem';
+    
+    // Add search input
+    const searchContainer = document.createElement('div');
+    searchContainer.className = 'search-container';
+    searchContainer.style.cssText = `
+      margin-bottom: 1.5rem;
+    `;
+    
+    searchContainer.innerHTML = `
+      <div class="form-group">
+        <label for="eventSearch">Search Events</label>
+        <input type="text" id="eventSearch" placeholder="Filter by title, type, or date...">
+      </div>
+    `;
+    
+    // Add events list
+    const eventsList = document.createElement('div');
+    eventsList.className = 'all-events-list';
+    eventsList.style.cssText = `
+      max-height: 60vh;
+      overflow-y: auto;
+      padding-right: 0.5rem;
+    `;
+    
+    // Add all events to the list
+    events.forEach(event => {
+      try {
+        const eventItem = document.createElement('div');
+        eventItem.className = 'booking-item';
+        
+        // Add class based on event type
+        if (event.type === 'blocked') {
+          eventItem.classList.add('blocked-item');
+        } else if (event.type === 'booked') {
+          eventItem.classList.add('booked-item');
+        }
+        
+        // Format date
+        const options = { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' };
+        const dateStr = event.dateObj.toLocaleDateString('en-US', options);
+        
+        // Format time
+        let timeStr = 'All Day';
+        if (!event.fullDay) {
+          // Convert to 12-hour format
+          const formatTime = (timeStr) => {
+            const [hours, minutes] = timeStr.split(':');
+            const hour = parseInt(hours);
+            const ampm = hour >= 12 ? 'PM' : 'AM';
+            const hour12 = hour % 12 || 12;
+            return `${hour12}:${minutes} ${ampm}`;
+          };
+          
+          timeStr = `${formatTime(event.startTime)} - ${formatTime(event.endTime)}`;
+        }
+        
+        // Add more details for the all events view
+        eventItem.innerHTML = `
+          <div>
+            <div class="booking-dates">${dateStr}</div>
+            <div class="booking-client">${event.title}</div>
+            <div class="booking-time">${timeStr}</div>
+            ${event.description ? `<div class="booking-description">${event.description}</div>` : ''}
+          </div>
+          <div class="booking-status">
+            <span class="badge ${event.type === 'blocked' ? 'badge-danger' : event.type === 'booked' ? 'badge-success' : 'badge-primary'}">
+              ${event.type === 'blocked' ? 'Blocked' : event.type === 'booked' ? 'Booked' : 'Event'}
+            </span>
+          </div>
+        `;
+        
+        // Add data attributes for filtering
+        eventItem.dataset.title = event.title.toLowerCase();
+        eventItem.dataset.type = event.type.toLowerCase();
+        eventItem.dataset.date = dateStr.toLowerCase();
+        eventItem.dataset.description = event.description ? event.description.toLowerCase() : '';
+        
+        // Add click handler to view details
+        eventItem.addEventListener('click', () => {
+          this.showEventDetails(event);
+          
+          // Close modal after selecting an event
+          setTimeout(() => {
+            modal.remove();
+          }, 100);
+        });
+        
+        eventsList.appendChild(eventItem);
+      } catch (error) {
+        console.error('Error rendering event in all events list:', error, event);
+      }
+    });
+    
+    // Add event listener for search filter
+    content.appendChild(title);
+    content.appendChild(searchContainer);
+    content.appendChild(eventsList);
+    content.appendChild(closeBtn);
+    modal.appendChild(content);
+    document.body.appendChild(modal);
+    
+    // Add search functionality
+    const searchInput = document.getElementById('eventSearch');
+    searchInput.addEventListener('input', () => {
+      const searchTerm = searchInput.value.toLowerCase();
+      const items = eventsList.querySelectorAll('.booking-item');
+      
+      items.forEach(item => {
+        const title = item.dataset.title;
+        const type = item.dataset.type;
+        const date = item.dataset.date;
+        const description = item.dataset.description;
+        
+        // Show/hide based on search term
+        if (
+          title.includes(searchTerm) || 
+          type.includes(searchTerm) || 
+          date.includes(searchTerm) ||
+          description.includes(searchTerm)
+        ) {
+          item.style.display = 'flex';
+        } else {
+          item.style.display = 'none';
+        }
+      });
+    });
+    
+    // Add custom styles for the modal
     const style = document.createElement('style');
     style.textContent = `
-      .booking-item {
-        display: flex;
-        justify-content: space-between;
-        padding: 1rem;
-        border-radius: 8px;
-        background-color: var(--gray-100);
-        margin-bottom: 0.75rem;
-        transition: all 0.2s;
-        border-left: 3px solid var(--primary);
+      .all-events-list {
+        scrollbar-width: thin;
+        scrollbar-color: var(--gray-400) transparent;
       }
       
-      .booking-item:hover {
-        transform: translateY(-2px);
-        box-shadow: var(--shadow-sm);
+      .all-events-list::-webkit-scrollbar {
+        width: 6px;
       }
       
-      .booking-item.booked-item {
-        border-left: 3px solid #007aff;
+      .all-events-list::-webkit-scrollbar-track {
+        background: transparent;
       }
       
-      .booking-item.blocked-item {
-        border-left: 3px solid var(--danger);
+      .all-events-list::-webkit-scrollbar-thumb {
+        background-color: var(--gray-400);
+        border-radius: 6px;
       }
       
-      .booking-dates {
-        font-weight: 500;
-        margin-bottom: 0.25rem;
-      }
-      
-      .booking-client {
-        font-size: 0.875rem;
-        color: var(--gray-800);
-      }
-      
-      .booking-time {
+      .booking-description {
         font-size: 0.75rem;
         color: var(--gray-600);
         margin-top: 0.25rem;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 300px;
       }
       
-      .booking-status {
-        display: flex;
-        align-items: center;
+      @media (max-width: 480px) {
+        .booking-description {
+          max-width: 200px;
+        }
       }
     `;
+    document.head.appendChild(style);
     
-    // Check if style already exists
-    if (!document.getElementById('booking-styles')) {
-      style.id = 'booking-styles';
-      document.head.appendChild(style);
-    }
+    // Focus the search input
+    setTimeout(() => {
+      searchInput.focus();
+    }, 100);
   },
   
   // Export calendar data to iCal
@@ -2702,6 +3237,35 @@ const Calendar = {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    
+    // Show success message
+    const notification = document.createElement('div');
+    notification.className = 'alert alert-success';
+    notification.style.cssText = `
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+      max-width: 400px;
+      z-index: 1000;
+      animation: slideIn 0.3s ease-out;
+    `;
+    
+    notification.innerHTML = `
+      <i class="fas fa-calendar-check"></i>
+      <div>
+        <strong>Calendar Exported</strong>
+        <p>Your calendar has been exported successfully.</p>
+      </div>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    // Remove after 3 seconds
+    setTimeout(() => {
+      notification.style.opacity = '0';
+      notification.style.transition = 'opacity 0.5s';
+      setTimeout(() => notification.remove(), 500);
+    }, 3000);
   },
   
   // Book a date range for a client with improved error handling
