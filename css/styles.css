@@ -869,6 +869,21 @@ and (orientation: portrait) {
     align-items: center;
     justify-content: center;
   }
+  
+  .calendar-controls .row {
+    margin-bottom: 0;
+  }
+  
+  /* Make the month display smaller */
+  .month-nav h3 {
+    font-size: 0.9rem;
+  }
+  
+  /* Make buttons even more compact */
+  #newEventBtn, #blockDateBtn, #exportCalendarBtn {
+    padding: 0.25rem 0.35rem;
+    font-size: 0.65rem;
+  }
 }
 
 /* Alerts */
