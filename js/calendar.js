@@ -15,6 +15,43 @@ const Calendar = {
   eventModal: null,
   bookingDetailsModal: null,
   viewMode: 'month', // 'month', 'week', or 'day'
+
+  // Helper function to parse YYYY-MM-DD string as local date
+  parseLocalDate(dateStr) {
+    if (!dateStr) return new Date(); // Return today if no date string
+    // Check if dateStr is already a Date object
+    if (dateStr instanceof Date) {
+        // Ensure it's a valid date
+        if (!isNaN(dateStr.getTime())) {
+            return dateStr;
+        } else {
+            console.warn("Invalid Date object passed to parseLocalDate:", dateStr);
+            return new Date(); // Fallback to today
+        }
+    }
+    // Check if it's a valid date string format
+    if (typeof dateStr !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+        console.warn("Invalid date string format passed to parseLocalDate:", dateStr);
+        // Try creating a date anyway, might be a different format
+        const attemptedDate = new Date(dateStr);
+        if (!isNaN(attemptedDate.getTime())) {
+            return attemptedDate; // It worked, return it
+        }
+        return new Date(); // Fallback to today
+    }
+    
+    const [year, month, day] = dateStr.split('-').map(Number);
+    // Note: month is 0-indexed in JavaScript Date constructor
+    // Create date in local timezone
+    const localDate = new Date(year, month - 1, day);
+    // Verify the date wasn't impacted by timezone shifts during creation (rare edge case)
+    if (localDate.getFullYear() !== year || localDate.getMonth() !== month - 1 || localDate.getDate() !== day) {
+        console.warn("Potential timezone issue during date creation for:", dateStr, "Result:", localDate);
+        // If shifted, try creating with UTC components to force local interpretation
+        return new Date(Date.UTC(year, month - 1, day));
+    }
+    return localDate;
+  },
   
   // Initialize calendar module
   async init() {
@@ -589,8 +626,8 @@ const Calendar = {
     
     if (!startDateInput.value || !endDateInput.value) return;
     
-    const startDate = new Date(startDateInput.value);
-    const endDate = new Date(endDateInput.value);
+    const startDate = this.parseLocalDate(startDateInput.value); // Use helper
+    const endDate = this.parseLocalDate(endDateInput.value);     // Use helper
     const dateConflict = this.checkDateConflicts(startDate, endDate);
     
     if (dateConflict) {
@@ -605,9 +642,10 @@ const Calendar = {
   // Check if date range has any conflicts with booked or blocked dates
   checkDateConflicts(startDate, endDate, excludeEventId = null) {
     // Clone date to avoid modifying the original
-    let currentDate = new Date(startDate);
-    
-    // Check each day in the range
+    let currentDate = new Date(startDate.getTime()); // Clone correctly
+    endDate = new Date(endDate.getTime()); // Ensure endDate is also a new object
+
+    // Check each day in the range (inclusive)
     while (currentDate <= endDate) {
       const dateStr = currentDate.toISOString().split('T')[0];
       
@@ -617,11 +655,12 @@ const Calendar = {
       }
       
       // Check for event conflicts
-      if (this.events[dateStr]) {
-        // If full day events exist, check if there are conflicts
+      if (this.events[dateStr] && Array.isArray(this.events[dateStr])) {
+        // Filter out the excluded event if provided
         const events = this.events[dateStr].filter(event => 
           !excludeEventId || event.id !== excludeEventId);
           
+        // Check if any remaining events are full day
         if (events.some(event => event.fullDay)) {
           return true;
         }
@@ -639,7 +678,7 @@ const Calendar = {
     const dateStr = date.toISOString().split('T')[0];
     
     // If no events on this date, there's no conflict
-    if (!this.events[dateStr]) return false;
+    if (!this.events[dateStr] || !Array.isArray(this.events[dateStr])) return false;
     
     // Convert times to minutes for easier comparison
     const start = this.timeToMinutes(startTime);
@@ -652,18 +691,23 @@ const Calendar = {
       
       // Full day events conflict with any time
       if (event.fullDay) return true;
+
+      // Skip if event doesn't have valid start/end times
+      if (!event.startTime || !event.endTime) return false;
       
       // Convert event times to minutes
       const eventStart = this.timeToMinutes(event.startTime);
       const eventEnd = this.timeToMinutes(event.endTime);
       
-      // Check for overlap
+      // Check for overlap: (start < eventEnd) and (end > eventStart)
+      // Ensure comparison handles edge cases like back-to-back bookings
       return (start < eventEnd && end > eventStart);
     });
   },
   
   // Convert time string to minutes (e.g., "09:30" -> 570)
   timeToMinutes(timeStr) {
+    if (!timeStr || !timeStr.includes(':')) return 0;
     const [hours, minutes] = timeStr.split(':').map(Number);
     return hours * 60 + minutes;
   },
@@ -721,18 +765,16 @@ const Calendar = {
     };
     
     if (this.viewMode === 'week') {
-      // Get first and last day of week
-      const firstDay = new Date(this.currentDate);
-      const day = this.currentDate.getDay();
-      const diff = this.currentDate.getDate() - day + (day === 0 ? -6 : 1); // Adjust when day is Sunday
-      firstDay.setDate(diff);
+      // Get first and last day of week (assuming week starts on Sunday for calculation)
+      const firstDayOfWeek = new Date(this.currentDate);
+      firstDayOfWeek.setDate(this.currentDate.getDate() - this.currentDate.getDay());
       
-      const lastDay = new Date(firstDay);
-      lastDay.setDate(firstDay.getDate() + 6);
+      const lastDayOfWeek = new Date(firstDayOfWeek);
+      lastDayOfWeek.setDate(firstDayOfWeek.getDate() + 6);
       
       // Format dates
-      const firstFormat = firstDay.toLocaleDateString('en-US', {month: 'short', day: 'numeric'});
-      const lastFormat = lastDay.toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'});
+      const firstFormat = firstDayOfWeek.toLocaleDateString('en-US', {month: 'short', day: 'numeric'});
+      const lastFormat = lastDayOfWeek.toLocaleDateString('en-US', {month: 'short', day: 'numeric', year: 'numeric'});
       
       monthTitle.textContent = `${firstFormat} - ${lastFormat}`;
     } else if (this.viewMode === 'day') {
@@ -747,7 +789,7 @@ const Calendar = {
   
   // Render month view calendar
   renderMonthView() {
-    // Update header days
+    // Update header days (assuming Sunday first)
     const header = document.querySelector('.calendar-header');
     if (header) {
       header.innerHTML = '';
@@ -766,39 +808,38 @@ const Calendar = {
     
     // Get current year and month
     const year = this.currentDate.getFullYear();
-    const month = this.currentDate.getMonth();
+    const month = this.currentDate.getMonth(); // 0-indexed
     
-    // Get first day of month
-    const firstDay = new Date(year, month, 1);
-    const lastDay = new Date(year, month + 1, 0);
+    // Get first day of month and last day of month
+    const firstDayOfMonth = new Date(year, month, 1);
+    const lastDayOfMonth = new Date(year, month + 1, 0);
     
     // Calculate days from previous month to display
-    const firstDayOfWeek = firstDay.getDay(); // 0 = Sunday, 1 = Monday, etc.
-    
-    // Calculate days from next month to display
-    const lastDayOfWeek = lastDay.getDay();
-    const daysFromNextMonth = 6 - lastDayOfWeek;
+    const firstDayOfWeek = firstDayOfMonth.getDay(); // 0 = Sunday, 1 = Monday, etc.
+    const daysInPrevMonth = new Date(year, month, 0).getDate();
     
     // Generate days from previous month
-    const prevMonthLastDay = new Date(year, month, 0).getDate();
     for (let i = 0; i < firstDayOfWeek; i++) {
-      const dayNumber = prevMonthLastDay - firstDayOfWeek + i + 1;
+      const dayNumber = daysInPrevMonth - firstDayOfWeek + i + 1;
       const dayDate = new Date(year, month - 1, dayNumber);
-      const dayElement = this.createMonthDayElement(dayDate, true);
+      const dayElement = this.createMonthDayElement(dayDate, true); // Pass Date object
       calendarGrid.appendChild(dayElement);
     }
     
     // Generate days for current month
-    for (let day = 1; day <= lastDay.getDate(); day++) {
+    for (let day = 1; day <= lastDayOfMonth.getDate(); day++) {
       const dayDate = new Date(year, month, day);
-      const dayElement = this.createMonthDayElement(dayDate, false);
+      const dayElement = this.createMonthDayElement(dayDate, false); // Pass Date object
       calendarGrid.appendChild(dayElement);
     }
     
     // Generate days from next month
+    const lastDayOfWeek = lastDayOfMonth.getDay();
+    const daysFromNextMonth = 6 - lastDayOfWeek;
+    
     for (let i = 1; i <= daysFromNextMonth; i++) {
       const dayDate = new Date(year, month + 1, i);
-      const dayElement = this.createMonthDayElement(dayDate, true);
+      const dayElement = this.createMonthDayElement(dayDate, true); // Pass Date object
       calendarGrid.appendChild(dayElement);
     }
     
@@ -810,14 +851,17 @@ const Calendar = {
   },
   
   // Create a day element for the month view with improved event handling
-  createMonthDayElement(date, isInactive) {
+  createMonthDayElement(date, isInactive) { // Accepts Date object
     const dayElement = document.createElement('div');
     dayElement.className = 'calendar-day';
     if (isInactive) dayElement.classList.add('inactive');
     
     // Check if date is today
     const today = new Date();
-    if (date.toDateString() === today.toDateString()) {
+    today.setHours(0, 0, 0, 0); // Normalize today's date
+    const normalizedDate = new Date(date.getTime());
+    normalizedDate.setHours(0, 0, 0, 0); // Normalize the cell's date
+    if (normalizedDate.getTime() === today.getTime()) {
       dayElement.classList.add('today');
     }
     
@@ -843,16 +887,22 @@ const Calendar = {
     if (this.events[dateStr] && Array.isArray(this.events[dateStr])) {
       // Sort events by all-day first, then by start time
       const sortedEvents = [...this.events[dateStr]].sort((a, b) => {
+        // Handle potential missing properties
+        const aFullDay = typeof a?.fullDay === 'boolean' ? a.fullDay : false;
+        const bFullDay = typeof b?.fullDay === 'boolean' ? b.fullDay : false;
+        const aStartTime = a?.startTime || '00:00';
+        const bStartTime = b?.startTime || '00:00';
+
         // All-day events first
-        if (a.fullDay && !b.fullDay) return -1;
-        if (!a.fullDay && b.fullDay) return 1;
+        if (aFullDay && !bFullDay) return -1;
+        if (!aFullDay && bFullDay) return 1;
         
         // Then by start time
-        if (!a.fullDay && !b.fullDay) {
-          return a.startTime.localeCompare(b.startTime);
+        if (!aFullDay && !bFullDay) {
+          return aStartTime.localeCompare(bStartTime);
         }
         
-        return 0;
+        return 0; // Keep original order if both are full day or mix cannot be sorted
       });
       
       // Count events for mobile display
@@ -889,10 +939,8 @@ const Calendar = {
           
           // Add time information if not full day (with fallback)
           let timeInfo = 'All day';
-          if (event.fullDay !== true) {
-            const startTime = event.startTime || '00:00';
-            const endTime = event.endTime || '23:59';
-            timeInfo = `${startTime} - ${endTime}`;
+          if (event.fullDay !== true && event.startTime && event.endTime) {
+            timeInfo = `${event.startTime} - ${event.endTime}`;
           }
           
           eventIndicator.innerHTML = `
@@ -910,8 +958,9 @@ const Calendar = {
           
           // Add event handler
           eventIndicator.addEventListener('click', (e) => {
-            e.stopPropagation();
-            this.showEventDetails(event);
+            e.stopPropagation(); // Prevent day click when clicking event
+            // Pass the original date string associated with this event
+            this.showEventDetails({...event, date: dateStr }); 
           });
           
           dayContent.appendChild(eventIndicator);
@@ -937,7 +986,7 @@ const Calendar = {
         moreIndicator.addEventListener('click', (e) => {
           e.stopPropagation();
           // Switch to day view for this date
-          this.currentDate = new Date(date);
+          this.currentDate = new Date(date.getTime()); // Use the actual date object
           this.viewMode = 'day';
           this.renderCalendar();
           
@@ -1000,7 +1049,7 @@ const Calendar = {
     // Add click handler for day selection
     if (!isInactive) {
       dayElement.addEventListener('click', () => {
-        this.handleDayClick(date, dayElement);
+        this.handleDayClick(date, dayElement); // Pass the actual Date object
       });
     }
     
@@ -1019,28 +1068,29 @@ const Calendar = {
       timeHeader.className = 'time-column-header';
       header.appendChild(timeHeader);
       
-      // Get first day of week (Monday if using Monday-Sunday, or Sunday if using Sunday-Saturday)
-      const firstDay = new Date(this.currentDate);
-      const day = this.currentDate.getDay();
-      const diff = this.currentDate.getDate() - day + (day === 0 ? -6 : 1); // Adjust when day is Sunday
-      firstDay.setDate(diff);
+      // Get first day of week (assuming Sunday start)
+      const firstDayOfWeek = new Date(this.currentDate);
+      firstDayOfWeek.setDate(this.currentDate.getDate() - this.currentDate.getDay());
+      firstDayOfWeek.setHours(0, 0, 0, 0); // Normalize
       
       // Create day headers
       for (let i = 0; i < 7; i++) {
-        const currentDay = new Date(firstDay);
-        currentDay.setDate(firstDay.getDate() + i);
+        const currentDayHeader = new Date(firstDayOfWeek);
+        currentDayHeader.setDate(firstDayOfWeek.getDate() + i);
         
         const dayHeader = document.createElement('div');
         dayHeader.className = 'week-day-header';
         
         // Check if this is today
-        if (currentDay.toDateString() === new Date().toDateString()) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        if (currentDayHeader.getTime() === today.getTime()) {
           dayHeader.classList.add('today');
         }
         
         // Format day header
-        const dayName = currentDay.toLocaleDateString('en-US', { weekday: 'short' });
-        const dayNum = currentDay.getDate();
+        const dayName = currentDayHeader.toLocaleDateString('en-US', { weekday: 'short' });
+        const dayNum = currentDayHeader.getDate();
         dayHeader.innerHTML = `<div>${dayName}</div><div class="day-number">${dayNum}</div>`;
         
         header.appendChild(dayHeader);
@@ -1072,16 +1122,15 @@ const Calendar = {
     
     weekContainer.appendChild(timeColumn);
     
-    // Get first day of week
-    const firstDay = new Date(this.currentDate);
-    const day = this.currentDate.getDay();
-    const diff = this.currentDate.getDate() - day + (day === 0 ? -6 : 1);
-    firstDay.setDate(diff);
+    // Get first day of week again for columns
+    const firstDayOfWeek = new Date(this.currentDate);
+    firstDayOfWeek.setDate(this.currentDate.getDate() - this.currentDate.getDay());
+    firstDayOfWeek.setHours(0, 0, 0, 0); // Normalize
     
     // Create columns for each day of the week
     for (let i = 0; i < 7; i++) {
-      const currentDay = new Date(firstDay);
-      currentDay.setDate(firstDay.getDate() + i);
+      const currentDay = new Date(firstDayOfWeek);
+      currentDay.setDate(firstDayOfWeek.getDate() + i);
       const dateStr = currentDay.toISOString().split('T')[0];
       
       // Create day column
@@ -1090,7 +1139,9 @@ const Calendar = {
       dayColumn.dataset.date = dateStr;
       
       // Check if this is today
-      if (currentDay.toDateString() === new Date().toDateString()) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (currentDay.getTime() === today.getTime()) {
         dayColumn.classList.add('today');
       }
       
@@ -1117,7 +1168,7 @@ const Calendar = {
           const startTime = `${hour.toString().padStart(2, '0')}:00`;
           const endTime = `${(hour + 1).toString().padStart(2, '0')}:00`;
           
-          this.showEventModal(currentDay, {
+          this.showEventModal(currentDay, { // Pass Date object
             startTime,
             endTime,
             type: 'regular'
@@ -1155,7 +1206,7 @@ const Calendar = {
               
               fullDayEvent.textContent = eventTitle;
               fullDayEvent.dataset.eventId = eventId;
-              fullDayEvent.addEventListener('click', () => this.showEventDetails(event));
+              fullDayEvent.addEventListener('click', () => this.showEventDetails({...event, date: dateStr})); // Pass date string
               
               // Insert at the beginning
               dayColumn.insertBefore(fullDayEvent, dayColumn.firstChild);
@@ -1164,13 +1215,24 @@ const Calendar = {
               const startTime = event.startTime || '00:00';
               const endTime = event.endTime || '23:59';
               
+              // Validate time format before splitting
+              if (!startTime.includes(':') || !endTime.includes(':')) {
+                 console.warn('Invalid time format for event:', event);
+                 return; // Skip rendering this event
+              }
+              
               const [startHour, startMinute] = startTime.split(':').map(Number);
               const [endHour, endMinute] = endTime.split(':').map(Number);
               
-              // Calculate position and height
-              const startFromTop = (startHour + startMinute / 60) * 60; // 60px per hour
-              const height = ((endHour + endMinute / 60) - (startHour + startMinute / 60)) * 60;
+              // Calculate position and height (assuming 60px per hour in CSS)
+              const pixelsPerHour = 60; 
+              const startFromTop = (startHour + startMinute / 60) * pixelsPerHour;
+              const durationMinutes = (endHour * 60 + endMinute) - (startHour * 60 + startMinute);
+              let height = (durationMinutes / 60) * pixelsPerHour;
               
+              // Ensure minimum height for visibility
+              height = Math.max(height, 15); // Minimum height of 15px
+
               const eventElement = document.createElement('div');
               eventElement.className = 'time-event';
               
@@ -1192,7 +1254,7 @@ const Calendar = {
               `;
               
               eventElement.dataset.eventId = eventId;
-              eventElement.addEventListener('click', () => this.showEventDetails(event));
+              eventElement.addEventListener('click', () => this.showEventDetails({...event, date: dateStr})); // Pass date string
               
               dayColumn.appendChild(eventElement);
             }
@@ -1208,7 +1270,7 @@ const Calendar = {
       // Add click handler for empty spaces
       dayColumn.addEventListener('click', (e) => {
         if (e.target === dayColumn) {
-          this.handleDayClick(currentDay);
+          this.handleDayClick(currentDay); // Pass Date object
         }
       });
     }
@@ -1218,196 +1280,218 @@ const Calendar = {
     if (container) {
       container.appendChild(weekContainer);
       
-      // Add custom styles for week view
-      const style = document.createElement('style');
-      style.textContent = `
-        .week-container {
-          display: grid;
-          grid-template-columns: 60px repeat(7, 1fr);
-          height: 1440px;
-          overflow-y: auto;
-          border: 1px solid var(--gray-300);
-          border-radius: 8px;
-          position: relative;
-        }
-        
-        .time-column, .day-column {
-          display: flex;
-          flex-direction: column;
-          position: relative;
-        }
-        
-        .hour-cell {
-          height: 60px;
-          border-bottom: 1px solid var(--gray-300);
-          border-right: 1px solid var(--gray-300);
-          padding: 0 0.25rem;
-          font-size: 0.75rem;
-          color: var(--gray-600);
-          display: flex;
-          align-items: flex-start;
-        }
-        
-        .time-column .hour-cell {
-          justify-content: flex-end;
-          padding-right: 0.5rem;
-        }
-        
-        .day-column {
-          background-color: var(--gray-100);
-        }
-        
-        .day-column.today {
-          background-color: rgba(var(--primary-rgb, 255, 123, 0), 0.05);
-        }
-        
-        .day-column.blocked {
-          background-color: rgba(var(--danger-rgb, 255, 59, 48), 0.05);
-        }
-        
-        .time-event {
-          position: absolute;
-          left: 2px;
-          right: 2px;
-          padding: 0.25rem;
-          border-radius: 4px;
-          font-size: 0.7rem;
-          overflow: hidden;
-          z-index: 2;
-          box-shadow: var(--shadow-sm);
-          cursor: pointer;
-        }
-        
-        .full-day-event {
-          margin: 2px;
-          padding: 0.25rem;
-          border-radius: 4px;
-          font-size: 0.7rem;
-          z-index: 3;
-          box-shadow: var(--shadow-sm);
-          cursor: pointer;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-        
-        .blocked-day-indicator {
-          position: absolute;
-          top: 0;
-          left: 0;
-          right: 0;
-          bottom: 0;
-          background-color: rgba(var(--danger-rgb, 255, 59, 48), 0.1);
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          z-index: 1;
-          font-size: 1.5rem;
-          color: var(--danger);
-          font-weight: 500;
-          opacity: 0.5;
-          pointer-events: none;
-        }
-        
-        .regular-event {
-          background-color: rgba(var(--primary-rgb, 255, 123, 0), 0.2);
-          border-left: 3px solid var(--primary);
-        }
-        
-        .booked-event {
-          background-color: rgba(0, 122, 255, 0.2);
-          border-left: 3px solid #007aff;
-        }
-        
-        .blocked-event {
-          background-color: rgba(var(--danger-rgb, 255, 59, 48), 0.2);
-          border-left: 3px solid var(--danger);
-        }
-        
-        .event-title {
-          font-weight: 500;
-          white-space: nowrap;
-          overflow: hidden;
-          text-overflow: ellipsis;
-        }
-        
-        .event-time {
-          font-size: 0.65rem;
-          opacity: 0.7;
-        }
-        
-        .calendar-header {
-          display: grid;
-          grid-template-columns: 60px repeat(7, 1fr);
-          gap: 0;
-          margin-bottom: 0;
-        }
-        
-        .week-day-header {
-          padding: 0.5rem;
-          text-align: center;
-          font-weight: 500;
-          border-top: 1px solid var(--gray-300);
-          border-right: 1px solid var(--gray-300);
-          background-color: var(--gray-200);
-        }
-        
-        .week-day-header.today {
-          background-color: rgba(var(--primary-rgb, 255, 123, 0), 0.1);
-        }
-        
-        .time-column-header {
-          border-top: 1px solid var(--gray-300);
-          border-left: 1px solid var(--gray-300);
-          border-right: 1px solid var(--gray-300);
-          background-color: var(--gray-200);
-        }
-        
-        @media (max-width: 768px) {
-          .week-container {
-            height: 1000px;
-          }
-          
-          .time-event, .full-day-event {
-            font-size: 0.6rem;
-            padding: 0.15rem;
-          }
-          
-          .event-time {
-            font-size: 0.55rem;
-          }
-        }
-        
-        @media (max-width: 480px) {
-          .time-column, .time-column-header {
-            width: 40px;
-          }
-          
-          .week-container {
-            grid-template-columns: 40px repeat(7, 1fr);
-          }
-          
-          .calendar-header {
-            grid-template-columns: 40px repeat(7, 1fr);
-          }
-          
-          .time-column .hour-cell {
-            padding-right: 0.25rem;
-            font-size: 0.6rem;
-          }
-          
-          .week-day-header {
-            padding: 0.25rem;
-            font-size: 0.75rem;
-          }
-          
-          .week-day-header .day-number {
-            font-size: 0.9rem;
-          }
-        }
-      `;
-      
-      document.head.appendChild(style);
+      // Add custom styles for week view (if not already present)
+       if (!document.getElementById('week-view-styles')) {
+        const style = document.createElement('style');
+        style.id = 'week-view-styles'; // Add ID to prevent duplication
+        style.textContent = `
+            /* Styles copied from original code... */
+            .week-container {
+              display: grid;
+              /* Ensure time column width matches header */
+              grid-template-columns: 60px repeat(7, 1fr); 
+              height: 1440px; /* 24 hours * 60px/hour */
+              overflow-y: auto;
+              border: 1px solid var(--gray-300);
+              border-radius: 8px;
+              position: relative; /* Needed for absolute positioning of events */
+            }
+            
+            .time-column, .day-column {
+              display: flex;
+              flex-direction: column;
+              position: relative; /* Needed for events */
+            }
+            
+            .hour-cell {
+              height: 60px; /* Matches pixelsPerHour */
+              border-bottom: 1px solid var(--gray-300);
+              border-right: 1px solid var(--gray-300);
+              padding: 0 0.25rem;
+              font-size: 0.75rem;
+              color: var(--gray-600);
+              display: flex;
+              align-items: flex-start;
+              box-sizing: border-box; /* Include padding/border in height */
+            }
+            
+            .time-column .hour-cell {
+              justify-content: flex-end;
+              padding-right: 0.5rem;
+            }
+            
+            .day-column {
+              background-color: var(--gray-100);
+              position: relative; /* For event positioning */
+            }
+
+            .day-column:last-child .hour-cell {
+                border-right: none; /* Remove right border on last day column */
+            }
+            
+            .day-column.today {
+              background-color: rgba(var(--primary-rgb, 255, 123, 0), 0.05);
+            }
+            
+            .day-column.blocked {
+              background-color: rgba(var(--danger-rgb, 255, 59, 48), 0.05);
+            }
+            
+            .time-event {
+              position: absolute;
+              left: 2px;
+              right: 2px;
+              padding: 0.25rem;
+              border-radius: 4px;
+              font-size: 0.7rem;
+              overflow: hidden;
+              z-index: 2;
+              box-shadow: var(--shadow-sm);
+              cursor: pointer;
+              box-sizing: border-box; /* Include padding/border */
+            }
+            
+            .full-day-event {
+              margin: 2px;
+              padding: 0.25rem;
+              border-radius: 4px;
+              font-size: 0.7rem;
+              z-index: 3; /* Above timed events */
+              box-shadow: var(--shadow-sm);
+              cursor: pointer;
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
+              position: relative; /* Ensure it's part of the layout */
+            }
+            
+            .blocked-day-indicator {
+              position: absolute;
+              top: 0;
+              left: 0;
+              right: 0;
+              bottom: 0;
+              background-color: rgba(var(--danger-rgb, 255, 59, 48), 0.1);
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              z-index: 1; /* Below events */
+              font-size: 1.5rem;
+              color: var(--danger);
+              font-weight: 500;
+              opacity: 0.5;
+              pointer-events: none; /* Allow clicks through */
+            }
+            
+            .regular-event {
+              background-color: rgba(var(--primary-rgb, 255, 123, 0), 0.2);
+              border-left: 3px solid var(--primary);
+              color: var(--primary-dark); /* Ensure text is visible */
+            }
+            
+            .booked-event {
+              background-color: rgba(0, 122, 255, 0.2);
+              border-left: 3px solid #007aff;
+              color: #005bb5; /* Ensure text is visible */
+            }
+            
+            .blocked-event {
+              background-color: rgba(var(--danger-rgb, 255, 59, 48), 0.2);
+              border-left: 3px solid var(--danger);
+              color: var(--danger); /* Ensure text is visible */
+            }
+            
+            .event-title {
+              font-weight: 500;
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
+            }
+            
+            .event-time {
+              font-size: 0.65rem;
+              opacity: 0.7;
+            }
+            
+            .calendar-header {
+              display: grid;
+              /* Match week container columns */
+              grid-template-columns: 60px repeat(7, 1fr); 
+              gap: 0;
+              margin-bottom: 0; /* Override default margin if any */
+            }
+            
+            .week-day-header {
+              padding: 0.5rem;
+              text-align: center;
+              font-weight: 500;
+              border-top: 1px solid var(--gray-300);
+              border-right: 1px solid var(--gray-300);
+              border-bottom: 1px solid var(--gray-300); /* Add bottom border */
+              background-color: var(--gray-200);
+            }
+            
+            .week-day-header:last-child {
+              border-right: none; /* No right border on last header */
+            }
+
+            .week-day-header.today {
+              background-color: rgba(var(--primary-rgb, 255, 123, 0), 0.1);
+              font-weight: bold;
+            }
+            
+            .time-column-header {
+              border: 1px solid var(--gray-300);
+              border-bottom: 1px solid var(--gray-300); /* Match day header */
+              border-left: none; /* Align with grid */
+              background-color: var(--gray-200);
+            }
+            
+            @media (max-width: 768px) {
+              .week-container {
+                height: 1000px; /* Adjust height */
+              }
+              
+              .time-event, .full-day-event {
+                font-size: 0.6rem;
+                padding: 0.15rem;
+              }
+              
+              .event-time {
+                font-size: 0.55rem;
+              }
+            }
+            
+            @media (max-width: 480px) {
+              .time-column, .time-column-header {
+                width: 40px; /* Adjust time column width */
+              }
+              
+              .week-container {
+                grid-template-columns: 40px repeat(7, 1fr);
+              }
+              
+              .calendar-header {
+                grid-template-columns: 40px repeat(7, 1fr);
+              }
+              
+              .time-column .hour-cell {
+                padding-right: 0.25rem;
+                font-size: 0.6rem;
+              }
+              
+              .week-day-header {
+                padding: 0.25rem;
+                font-size: 0.75rem;
+              }
+              
+              .week-day-header .day-number {
+                font-size: 0.9rem;
+              }
+            }
+        `;
+        document.head.appendChild(style);
+       }
     }
   },
   
@@ -1419,8 +1503,6 @@ const Calendar = {
     
     // Format current date for lookup and display
     const dateStr = this.currentDate.toISOString().split('T')[0];
-    const dayName = this.currentDate.toLocaleDateString('en-US', { weekday: 'long' });
-    const formattedDate = this.currentDate.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
     
     // Create header area for full-day events
     const allDaySection = document.createElement('div');
@@ -1430,15 +1512,16 @@ const Calendar = {
       <div class="all-day-events"></div>
     `;
     
+    const allDayEventsContainer = allDaySection.querySelector('.all-day-events');
+
     // Check if date is blocked
     if (this.blockedDates[dateStr]) {
-      allDaySection.querySelector('.all-day-events').innerHTML = `
+      allDayEventsContainer.innerHTML = `
         <div class="all-day-event blocked-event">
           <div class="event-title">${this.blockedDates[dateStr] || 'Unavailable'}</div>
         </div>
       `;
-      
-      // Add blocked styling to container
+      // Add blocked styling to container (affects time grid)
       dayContainer.classList.add('blocked-day');
     }
     
@@ -1447,8 +1530,6 @@ const Calendar = {
       const fullDayEvents = this.events[dateStr].filter(event => event && event.fullDay);
       
       if (fullDayEvents.length > 0) {
-        const allDayEventsContainer = allDaySection.querySelector('.all-day-events');
-        
         fullDayEvents.forEach(event => {
           try {
             // Validate event
@@ -1475,7 +1556,7 @@ const Calendar = {
             
             eventElement.innerHTML = `<div class="event-title">${eventTitle}</div>`;
             eventElement.dataset.eventId = eventId;
-            eventElement.addEventListener('click', () => this.showEventDetails(event));
+            eventElement.addEventListener('click', () => this.showEventDetails({...event, date: dateStr})); // Pass date string
             
             allDayEventsContainer.appendChild(eventElement);
           } catch (error) {
@@ -1485,11 +1566,16 @@ const Calendar = {
       }
     }
     
-    // Create time grid
-    const timeGrid = document.createElement('div');
-    timeGrid.className = 'day-time-grid';
+    // Create time grid container which will hold events absolutely positioned
+    const timeGridContainer = document.createElement('div');
+    timeGridContainer.className = 'day-time-grid-container'; // Wrapper
+    timeGridContainer.style.position = 'relative'; // Needed for absolute event positioning
     
-    // Add hour rows
+    // Create the visual time grid (background lines and labels)
+    const timeGridBackground = document.createElement('div');
+    timeGridBackground.className = 'day-time-grid-background';
+
+    // Add hour rows to the background grid
     for (let hour = 0; hour < 24; hour++) {
       const hourRow = document.createElement('div');
       hourRow.className = 'hour-row';
@@ -1502,17 +1588,17 @@ const Calendar = {
       
       hourRow.innerHTML = `
         <div class="hour-label">${hourDisplay}</div>
-        <div class="hour-events"></div>
+        <div class="hour-content"></div>
       `;
       
-      // Add click handler to create new event
-      hourRow.querySelector('.hour-events').addEventListener('click', (e) => {
-        if (e.target === hourRow.querySelector('.hour-events')) {
+      // Add click handler to create new event on the content area
+      hourRow.querySelector('.hour-content').addEventListener('click', (e) => {
+        if (e.target === hourRow.querySelector('.hour-content')) {
           // Calculate start time based on clicked hour
           const startTime = `${hour.toString().padStart(2, '0')}:00`;
           const endTime = `${(hour + 1).toString().padStart(2, '0')}:00`;
           
-          this.showEventModal(this.currentDate, {
+          this.showEventModal(this.currentDate, { // Pass Date object
             startTime,
             endTime,
             type: 'regular'
@@ -1520,10 +1606,23 @@ const Calendar = {
         }
       });
       
-      timeGrid.appendChild(hourRow);
+      timeGridBackground.appendChild(hourRow);
     }
-    
-    // Add timed events
+
+    // Append background grid first
+    timeGridContainer.appendChild(timeGridBackground);
+
+    // Create container for timed events (positioned over the background)
+    const timedEventsContainer = document.createElement('div');
+    timedEventsContainer.className = 'day-timed-events';
+    timedEventsContainer.style.position = 'absolute';
+    timedEventsContainer.style.top = '0';
+    timedEventsContainer.style.left = '80px'; // Match hour-label width + border
+    timedEventsContainer.style.right = '0';
+    timedEventsContainer.style.bottom = '0';
+    timedEventsContainer.style.pointerEvents = 'none'; // Allow clicks to pass through to background grid
+
+    // Add timed events to their container
     if (this.events[dateStr] && Array.isArray(this.events[dateStr])) {
       const timedEvents = this.events[dateStr].filter(event => event && !event.fullDay);
       
@@ -1542,16 +1641,28 @@ const Calendar = {
           
           const startTime = event.startTime || '00:00';
           const endTime = event.endTime || '23:59';
+
+          // Validate time format before splitting
+          if (!startTime.includes(':') || !endTime.includes(':')) {
+             console.warn('Invalid time format for event:', event);
+             return; // Skip rendering this event
+          }
           
           const [startHour, startMinute] = startTime.split(':').map(Number);
           const [endHour, endMinute] = endTime.split(':').map(Number);
           
-          // Calculate position and height
-          const startFromTop = (startHour + startMinute / 60) * 60; // 60px per hour
-          const height = ((endHour + endMinute / 60) - (startHour + startMinute / 60)) * 60;
+          // Calculate position and height (assuming 60px per hour)
+          const pixelsPerHour = 60;
+          const startFromTop = (startHour + startMinute / 60) * pixelsPerHour;
+          const durationMinutes = (endHour * 60 + endMinute) - (startHour * 60 + startMinute);
+          let height = (durationMinutes / 60) * pixelsPerHour;
+
+          // Ensure minimum height
+          height = Math.max(height, 15); // Min 15px height
           
           const eventElement = document.createElement('div');
           eventElement.className = 'day-time-event';
+          eventElement.style.pointerEvents = 'auto'; // Make events clickable
           
           // Set event style based on type
           if (eventType === 'blocked') {
@@ -1568,205 +1679,240 @@ const Calendar = {
           eventElement.innerHTML = `
             <div class="event-title">${eventTitle}</div>
             <div class="event-time">${startTime} - ${endTime}</div>
-            <div class="event-description">${eventDescription}</div>
+            ${eventDescription ? `<div class="event-description">${eventDescription}</div>` : ''}
           `;
           
           eventElement.dataset.eventId = eventId;
-          eventElement.addEventListener('click', () => this.showEventDetails(event));
+          eventElement.addEventListener('click', () => this.showEventDetails({...event, date: dateStr})); // Pass date string
           
-          timeGrid.appendChild(eventElement);
+          timedEventsContainer.appendChild(eventElement);
         } catch (error) {
           console.error('Error rendering timed event:', error, event);
         }
       });
     }
+
+    // Append timed events container on top
+    timeGridContainer.appendChild(timedEventsContainer);
     
-    // Add all day section and time grid to day container
+    // Add all day section and time grid container to the main day container
     dayContainer.appendChild(allDaySection);
-    dayContainer.appendChild(timeGrid);
+    
+    // Wrap the time grid container in a scrollable div
+    const scrollableGrid = document.createElement('div');
+    scrollableGrid.className = 'day-view-scrollable';
+    scrollableGrid.style.overflowY = 'auto';
+    scrollableGrid.style.flex = '1'; // Take remaining height
+    scrollableGrid.appendChild(timeGridContainer);
+    
+    dayContainer.appendChild(scrollableGrid);
     
     // Add day container to calendar container
     const container = document.querySelector('.calendar-container');
     if (container) {
       container.appendChild(dayContainer);
       
-      // Add custom styles for day view
-      const style = document.createElement('style');
-      style.textContent = `
-        .day-view-container {
-          display: flex;
-          flex-direction: column;
-          height: 100%;
-          border: 1px solid var(--gray-300);
-          border-radius: 8px;
-          overflow: hidden;
-        }
-        
-        .all-day-section {
-          display: flex;
-          border-bottom: 1px solid var(--gray-300);
-        }
-        
-        .all-day-label {
-          width: 80px;
-          padding: 0.5rem;
-          font-size: 0.875rem;
-          font-weight: 500;
-          background-color: var(--gray-200);
-          display: flex;
-          align-items: center;
-          border-right: 1px solid var(--gray-300);
-        }
-        
-        .all-day-events {
-          flex: 1;
-          padding: 0.5rem;
-          display: flex;
-          flex-direction: column;
-          gap: 0.5rem;
-        }
-        
-        .all-day-event {
-          padding: 0.5rem;
-          border-radius: 4px;
-          font-size: 0.875rem;
-          cursor: pointer;
-        }
-        
-        .day-time-grid {
-          flex: 1;
-          overflow-y: auto;
-          position: relative;
-          height: 1440px;
-        }
-        
-        .hour-row {
-          display: flex;
-          height: 60px;
-          border-bottom: 1px solid var(--gray-300);
-        }
-        
-        .hour-label {
-          width: 80px;
-          padding: 0 0.5rem;
-          font-size: 0.75rem;
-          color: var(--gray-600);
-          display: flex;
-          align-items: flex-start;
-          justify-content: flex-end;
-          background-color: var(--gray-200);
-          border-right: 1px solid var(--gray-300);
-        }
-        
-        .hour-events {
-          flex: 1;
-          background-color: var(--gray-100);
-          position: relative;
-        }
-        
-        .day-time-event {
-          position: absolute;
-          left: 4px;
-          right: 4px;
-          padding: 0.5rem;
-          border-radius: 4px;
-          font-size: 0.875rem;
-          overflow: hidden;
-          z-index: 2;
-          box-shadow: var(--shadow-sm);
-          cursor: pointer;
-        }
-        
-        .blocked-day .hour-events {
-          background-color: rgba(var(--danger-rgb, 255, 59, 48), 0.05);
-        }
-        
-        .regular-event {
-          background-color: rgba(var(--primary-rgb, 255, 123, 0), 0.2);
-          border-left: 3px solid var(--primary);
-        }
-        
-        .booked-event {
-          background-color: rgba(0, 122, 255, 0.2);
-          border-left: 3px solid #007aff;
-        }
-        
-        .blocked-event {
-          background-color: rgba(var(--danger-rgb, 255, 59, 48), 0.2);
-          border-left: 3px solid var(--danger);
-        }
-        
-        .event-description {
-          font-size: 0.75rem;
-          margin-top: 0.25rem;
-          opacity: 0.8;
-        }
-        
-        @media (max-width: 768px) {
-          .day-time-grid {
-            height: 1000px;
-          }
-          
-          .all-day-label {
-            width: 60px;
-            font-size: 0.75rem;
-          }
-          
-          .hour-label {
-            width: 60px;
-            font-size: 0.7rem;
-          }
-          
-          .day-time-event {
-            font-size: 0.75rem;
-            padding: 0.25rem;
-          }
-          
-          .event-description {
-            font-size: 0.65rem;
-          }
-        }
-        
-        @media (max-width: 480px) {
-          .all-day-label {
-            width: 50px;
-            font-size: 0.7rem;
-            padding: 0.25rem;
-          }
-          
-          .hour-label {
-            width: 50px;
-            font-size: 0.65rem;
-            padding: 0 0.25rem;
-          }
-          
-          .all-day-event {
-            font-size: 0.8rem;
-            padding: 0.35rem;
-          }
-        }
-      `;
-      
-      document.head.appendChild(style);
+      // Add custom styles for day view (if not already present)
+      if (!document.getElementById('day-view-styles')) {
+        const style = document.createElement('style');
+        style.id = 'day-view-styles'; // Add ID
+        style.textContent = `
+            .day-view-container {
+              display: flex;
+              flex-direction: column;
+              height: calc(100vh - 200px); /* Adjust height calculation as needed */
+              min-height: 500px; /* Minimum height */
+              border: 1px solid var(--gray-300);
+              border-radius: 8px;
+              overflow: hidden;
+            }
+            
+            .all-day-section {
+              display: flex;
+              border-bottom: 1px solid var(--gray-300);
+              flex-shrink: 0; /* Prevent shrinking */
+            }
+            
+            .all-day-label {
+              width: 80px; /* Match hour label width */
+              padding: 0.5rem;
+              font-size: 0.875rem;
+              font-weight: 500;
+              background-color: var(--gray-200);
+              display: flex;
+              align-items: center;
+              border-right: 1px solid var(--gray-300);
+              box-sizing: border-box;
+            }
+            
+            .all-day-events {
+              flex: 1;
+              padding: 0.5rem;
+              display: flex;
+              flex-direction: column;
+              gap: 0.25rem; /* Tighter spacing for all-day */
+              background-color: var(--gray-100); /* Background for events */
+            }
+            
+            .all-day-event {
+              padding: 0.25rem 0.5rem; /* Smaller padding */
+              border-radius: 4px;
+              font-size: 0.75rem; /* Smaller font */
+              cursor: pointer;
+              white-space: nowrap;
+              overflow: hidden;
+              text-overflow: ellipsis;
+            }
+
+            .day-view-scrollable {
+              overflow-y: auto;
+              flex-grow: 1; /* Allows scrolling */
+            }
+            
+            .day-time-grid-container {
+                position: relative; /* For absolute event positioning */
+                height: 1440px; /* 24 * 60px */
+            }
+
+            .day-time-grid-background {
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                z-index: 0; /* Background layer */
+            }
+            
+            .hour-row {
+              display: flex;
+              height: 60px; /* Matches pixelsPerHour */
+              border-bottom: 1px solid var(--gray-300);
+              box-sizing: border-box;
+            }
+
+             .hour-row:last-child {
+                border-bottom: none; /* No bottom border on last row */
+            }
+            
+            .hour-label {
+              width: 80px; /* Fixed width */
+              padding: 0 0.5rem;
+              font-size: 0.75rem;
+              color: var(--gray-600);
+              display: flex;
+              align-items: flex-start;
+              justify-content: flex-end;
+              background-color: var(--gray-200);
+              border-right: 1px solid var(--gray-300);
+              box-sizing: border-box;
+              flex-shrink: 0;
+            }
+            
+            .hour-content {
+              flex: 1; /* Takes remaining width */
+              background-color: var(--gray-100);
+              position: relative; /* Can be used for half-hour lines if needed */
+            }
+
+             .day-view-container.blocked-day .hour-content {
+                background-color: rgba(var(--danger-rgb, 255, 59, 48), 0.05); /* Apply blocked bg */
+            }
+
+            .day-timed-events {
+                position: absolute;
+                top: 0;
+                left: 80px; /* Align with content area */
+                right: 0;
+                bottom: 0;
+                z-index: 1; /* Events above background */
+                pointer-events: none; /* Allow clicks to background unless hitting an event */
+            }
+            
+            .day-time-event {
+              position: absolute;
+              left: 4px; /* Padding from edge */
+              right: 4px; /* Padding from edge */
+              padding: 0.25rem 0.5rem;
+              border-radius: 4px;
+              font-size: 0.75rem;
+              overflow: hidden;
+              box-shadow: var(--shadow-sm);
+              cursor: pointer;
+              box-sizing: border-box;
+              pointer-events: auto; /* Make events clickable */
+              z-index: 2; /* Events above other elements */
+            }
+
+            /* --- Event Colors (copied) --- */
+            .regular-event {
+              background-color: rgba(var(--primary-rgb, 255, 123, 0), 0.2);
+              border-left: 3px solid var(--primary);
+              color: var(--primary-dark);
+            }
+            
+            .booked-event {
+              background-color: rgba(0, 122, 255, 0.2);
+              border-left: 3px solid #007aff;
+              color: #005bb5;
+            }
+            
+            .blocked-event {
+              background-color: rgba(var(--danger-rgb, 255, 59, 48), 0.2);
+              border-left: 3px solid var(--danger);
+              color: var(--danger);
+            }
+            /* --- End Event Colors --- */
+            
+            .event-description {
+              font-size: 0.7rem; /* Smaller description */
+              margin-top: 0.15rem;
+              opacity: 0.8;
+              white-space: normal; /* Allow wrapping */
+              overflow: hidden; /* Hide overflow */
+            }
+            
+            @media (max-width: 768px) {
+              .day-view-container { height: calc(100vh - 180px); } /* Adjust height */
+              .all-day-label, .hour-label { width: 60px; font-size: 0.7rem; }
+              .day-timed-events { left: 60px; }
+              .day-time-event, .all-day-event { font-size: 0.7rem; padding: 0.2rem 0.4rem;}
+              .event-description { font-size: 0.65rem; }
+            }
+            
+            @media (max-width: 480px) {
+              .all-day-label, .hour-label { width: 50px; font-size: 0.65rem; padding: 0 0.25rem;}
+              .day-timed-events { left: 50px; }
+              .all-day-event { font-size: 0.7rem; }
+              .day-time-event { font-size: 0.65rem; padding: 0.15rem 0.3rem;}
+            }
+        `;
+        document.head.appendChild(style);
+      }
     }
   },
   
   // Handle day click (for date selection or details)
-  handleDayClick(date, element) {
-    // Open the event creation modal
-    this.showEventModal(date);
+  handleDayClick(date, element) { // Accepts Date object
+    // Open the event creation modal for the specific date
+    this.showEventModal(date); // Pass Date object
   },
   
   // Show event creation/edit modal
-  showEventModal(date = null, eventData = null) {
-    // Set default date to today if not provided
-    if (!date) {
-      date = new Date();
+  showEventModal(date = null, eventData = null) { // date should be a Date object
+    // Ensure 'date' is a valid Date object, default to today if not
+    let currentEventDate;
+    if (date instanceof Date && !isNaN(date)) {
+        currentEventDate = date;
+    } else {
+        console.warn("Invalid or missing date passed to showEventModal, defaulting to today.");
+        currentEventDate = new Date();
+        currentEventDate.setHours(0, 0, 0, 0); // Normalize to start of day
     }
-    
-    // Format date string
-    const dateStr = date.toISOString().split('T')[0];
-    const formattedDate = date.toLocaleDateString('en-US', { 
+
+    // Format date string for input field (YYYY-MM-DD)
+    const dateStr = currentEventDate.toISOString().split('T')[0];
+    // Format date for display
+    const formattedDate = currentEventDate.toLocaleDateString('en-US', { 
       weekday: 'long', 
       year: 'numeric', 
       month: 'long', 
@@ -1791,17 +1937,19 @@ const Calendar = {
     const form = modal.querySelector('#eventForm');
     form.reset();
     
-    // Set date
+    // Set date input value (always YYYY-MM-DD format)
     form.querySelector('#eventDate').value = dateStr;
     
-    // Make date picker visible for editing
+    // Make date picker visible only for editing
     form.querySelector('#eventDate').style.display = isEditing ? 'block' : 'none';
+    form.querySelector('#eventDateLabel').style.display = isEditing ? 'block' : 'none';
     
+    // Set the human-readable date display
     form.querySelector('#eventDateDisplay').textContent = formattedDate;
     
-    // Add label for date picker when editing
+    // Add label hint for date picker when editing
     if (isEditing) {
-      form.querySelector('#eventDateDisplay').innerHTML += '<br><small style="font-weight: normal; color: var(--primary);">You can change the date below:</small>';
+      form.querySelector('#eventDateLabel').innerHTML = 'Change Date:';
     }
     
     // Set event type
@@ -1821,7 +1969,7 @@ const Calendar = {
       }
       
       // Show delete button
-      form.querySelector('#deleteEventBtn').style.display = 'block';
+      form.querySelector('#deleteEventBtn').style.display = 'inline-block'; // Use inline-block for btn-group
     } else {
       // Set default values for new event
       form.querySelector('#eventId').value = '';
@@ -1835,18 +1983,10 @@ const Calendar = {
         form.querySelector('#eventTitle').value = '';
       }
       
-      // Set time if provided
-      if (event?.startTime) {
-        form.querySelector('#eventStartTime').value = event.startTime;
-      } else {
-        form.querySelector('#eventStartTime').value = '09:00';
-      }
-      
-      if (event?.endTime) {
-        form.querySelector('#eventEndTime').value = event.endTime;
-      } else {
-        form.querySelector('#eventEndTime').value = '10:00';
-      }
+      // Set time if provided (e.g., clicking on a specific hour)
+      form.querySelector('#eventFullDay').checked = false; // Default to not full day
+      form.querySelector('#eventStartTime').value = event?.startTime || '09:00';
+      form.querySelector('#eventEndTime').value = event?.endTime || '10:00';
       
       // Hide delete button
       form.querySelector('#deleteEventBtn').style.display = 'none';
@@ -1854,6 +1994,11 @@ const Calendar = {
     
     // Toggle time inputs based on full day
     this.toggleEventTimeInputs();
+    
+    // Clear any previous warnings
+     if (modal.querySelector('#timeConflictWarning')) {
+        modal.querySelector('#timeConflictWarning').style.display = 'none';
+     }
     
     // Show the modal
     modal.style.display = 'flex';
@@ -1923,13 +2068,14 @@ const Calendar = {
       
       <input type="hidden" id="eventId">
       
-      <div style="margin-bottom: 1.5rem;">
-        <div id="eventDateDisplay" style="font-weight: 500; margin-bottom: 0.5rem;"></div>
-        <!-- Make date input visible as a form control -->
-        <div class="form-group">
-          <label for="eventDate">Change Date (when editing)</label>
-          <input type="date" id="eventDate" style="display: none;">
-        </div>
+      <div style="margin-bottom: 0.5rem;">
+        <label>Date:</label>
+        <div id="eventDateDisplay" style="font-weight: 500;"></div>
+      </div>
+
+      <div class="form-group" style="margin-bottom: 1.5rem;">
+        <label for="eventDate" id="eventDateLabel" style="display: none;">Change Date:</label>
+        <input type="date" id="eventDate" style="display: none;">
       </div>
       
       <div class="form-group">
@@ -1983,20 +2129,20 @@ const Calendar = {
           <i class="fas fa-exclamation-circle"></i>
           <div>
             <strong>Time Conflict!</strong>
-            <p>This time slot conflicts with another event. Please choose a different time.</p>
+            <p>This time slot conflicts with another event or is invalid.</p>
           </div>
         </div>
       </div>
       
-      <div class="btn-group">
-        <button type="submit" class="btn btn-primary">
-          <i class="fas fa-save"></i> Save Event
-        </button>
-        <button type="button" id="deleteEventBtn" class="btn btn-danger" style="display: none;">
-          <i class="fas fa-trash"></i> Delete
-        </button>
+      <div class="btn-group" style="justify-content: flex-end;">
         <button type="button" class="btn btn-outline" id="cancelEventBtn">
           <i class="fas fa-times"></i> Cancel
+        </button>
+         <button type="button" id="deleteEventBtn" class="btn btn-danger" style="display: none;">
+          <i class="fas fa-trash"></i> Delete
+        </button>
+        <button type="submit" class="btn btn-primary">
+          <i class="fas fa-save"></i> Save Event
         </button>
       </div>
     `;
@@ -2008,14 +2154,21 @@ const Calendar = {
     document.body.appendChild(modal);
     
     // Add event listeners
-    form.querySelector('#eventFullDay').addEventListener('change', () => this.toggleEventTimeInputs());
+    form.querySelector('#eventFullDay').addEventListener('change', () => {
+        this.toggleEventTimeInputs();
+        this.validateEventTimes(); // Re-validate when toggling full day
+    });
     form.querySelector('#cancelEventBtn').addEventListener('click', () => modal.style.display = 'none');
     form.querySelector('#deleteEventBtn').addEventListener('click', () => this.deleteEvent());
     
-    // Add time input validation
+    // Add time input validation on change
     form.querySelector('#eventStartTime').addEventListener('change', () => this.validateEventTimes());
     form.querySelector('#eventEndTime').addEventListener('change', () => this.validateEventTimes());
-    
+     // Also validate when event type changes (e.g., from blocked to regular)
+    form.querySelector('#eventType').addEventListener('change', () => this.validateEventTimes());
+    // And when date changes (if editing)
+    form.querySelector('#eventDate').addEventListener('change', () => this.validateEventTimes());
+
     // Store modal reference
     this.eventModal = modal;
   },
@@ -2029,177 +2182,329 @@ const Calendar = {
     timeInputs.style.display = fullDay ? 'none' : 'block';
   },
   
-  // Validate event times
+  // Validate event times (both order and conflicts)
   validateEventTimes() {
     const form = this.eventModal.querySelector('#eventForm');
-    const startTime = form.querySelector('#eventStartTime').value;
-    const endTime = form.querySelector('#eventEndTime').value;
+    const startTimeInput = form.querySelector('#eventStartTime');
+    const endTimeInput = form.querySelector('#eventEndTime');
+    const startTime = startTimeInput.value;
+    const endTime = endTimeInput.value;
     const warning = form.querySelector('#timeConflictWarning');
-    
-    // Check if end time is after start time
+    const fullDay = form.querySelector('#eventFullDay').checked;
+    const saveButton = form.querySelector('button[type="submit"]');
+
+    // Don't validate times if it's a full-day event
+    if (fullDay) {
+      warning.style.display = 'none';
+      startTimeInput.setCustomValidity("");
+      endTimeInput.setCustomValidity("");
+      saveButton.disabled = false; // Ensure save is enabled
+      return true;
+    }
+
+    // Check if start and end times are present
+    if (!startTime || !endTime) {
+        warning.style.display = 'none'; // No warning if times aren't set yet
+        startTimeInput.setCustomValidity("");
+        endTimeInput.setCustomValidity("");
+        saveButton.disabled = false; // Or maybe true if required? Depends on logic.
+        return true; // Allow saving if times are optional/being entered
+    }
+
+    // 1. Check if end time is after start time
     if (startTime >= endTime) {
-      warning.style.display = 'block';
+      warning.style.display = 'flex'; // Use flex for alert layout
       warning.querySelector('p').textContent = 'End time must be after start time.';
+      // Use HTML5 validation API for better feedback
+      startTimeInput.setCustomValidity("Start time must be before end time.");
+      endTimeInput.setCustomValidity("End time must be after start time.");
+      saveButton.disabled = true; // Disable save on validation error
       return false;
+    } else {
+      startTimeInput.setCustomValidity(""); // Clear previous validation error
+      endTimeInput.setCustomValidity("");
     }
     
-    // Check for conflicts with other events
+    // 2. Check for conflicts with other events
     const eventId = form.querySelector('#eventId').value;
-    const date = new Date(form.querySelector('#eventDate').value);
+    const dateInput = form.querySelector('#eventDate').value;
+    const date = this.parseLocalDate(dateInput); // Use helper to parse date
     
     if (this.checkTimeConflicts(date, startTime, endTime, eventId)) {
-      warning.style.display = 'block';
-      warning.querySelector('p').textContent = 'This time conflicts with another event. Please choose a different time.';
+      warning.style.display = 'flex';
+      warning.querySelector('p').textContent = 'This time conflicts with another event.';
+      startTimeInput.setCustomValidity("Time conflict with another event.");
+      endTimeInput.setCustomValidity("Time conflict with another event.");
+      saveButton.disabled = true; // Disable save on validation error
       return false;
     }
     
-    // No conflicts
+    // No conflicts, times are valid
     warning.style.display = 'none';
+    startTimeInput.setCustomValidity(""); // Ensure validation state is clear
+    endTimeInput.setCustomValidity("");
+    saveButton.disabled = false; // Enable save button
     return true;
   },
   
   // Save event
-  saveEvent() {
+  async saveEvent() {
     const form = this.eventModal.querySelector('#eventForm');
+    const fullDay = form.querySelector('#eventFullDay').checked;
+    const saveButton = form.querySelector('button[type="submit"]');
+
+    // Explicitly re-validate before saving
+    if (!fullDay && !this.validateEventTimes()) {
+        console.error("Attempted to save with invalid times.");
+        // Optionally shake the modal or highlight the warning
+        const warning = form.querySelector('#timeConflictWarning');
+        if (warning) {
+             warning.classList.add('shake-animation'); // Add a CSS animation class
+             setTimeout(() => warning.classList.remove('shake-animation'), 500);
+        }
+        saveButton.disabled = true; // Ensure save is disabled
+        return false; // Stop saving
+    }
     
     // Get form values
-    const eventId = form.querySelector('#eventId').value || `event_${Date.now()}`;
-    const date = new Date(form.querySelector('#eventDate').value);
-    const dateStr = date.toISOString().split('T')[0];
-    const title = form.querySelector('#eventTitle').value;
-    const description = form.querySelector('#eventDescription').value;
+    const eventId = form.querySelector('#eventId').value || `event_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`; // Ensure unique ID
+    const newDateStr = form.querySelector('#eventDate').value; // YYYY-MM-DD format
+    const title = form.querySelector('#eventTitle').value.trim(); // Trim whitespace
+    const description = form.querySelector('#eventDescription').value.trim();
     const eventType = form.querySelector('#eventType').value;
-    const fullDay = form.querySelector('#eventFullDay').checked;
     
     // Get time values if not full day
-    let startTime = '00:00';
-    let endTime = '23:59';
+    let startTime = null;
+    let endTime = null;
     
     if (!fullDay) {
       startTime = form.querySelector('#eventStartTime').value;
       endTime = form.querySelector('#eventEndTime').value;
-      
-      // Validate times
-      if (!this.validateEventTimes()) {
-        return false;
-      }
+      // Validation already happened, but double check times exist
+       if (!startTime || !endTime) {
+           console.error("Start or end time missing for non-full-day event.");
+           // Display an error message
+           return false;
+       }
     }
 
-    // Check if we're editing an existing event
+    // Find the original date if editing
     const existingEventId = form.querySelector('#eventId').value;
-    let oldDateStr = null;
+    let originalDateStr = null;
+    let originalEventIndex = -1;
     
     if (existingEventId) {
-      // Find the existing event's date
-      for (const date in this.events) {
-        const eventIndex = this.events[date].findIndex(e => e.id === existingEventId);
-        if (eventIndex !== -1) {
-          oldDateStr = date;
-          break;
-        }
-      }
-      
-      // If found and the date is different, remove from old date
-      if (oldDateStr && oldDateStr !== dateStr) {
-        this.events[oldDateStr] = this.events[oldDateStr].filter(e => e.id !== existingEventId);
-        
-        // Remove empty date array
-        if (this.events[oldDateStr].length === 0) {
-          delete this.events[oldDateStr];
+      // Find the original event to get its date string
+      for (const dateKey in this.events) {
+        if (Array.isArray(this.events[dateKey])) {
+            const index = this.events[dateKey].findIndex(e => e && e.id === existingEventId);
+            if (index !== -1) {
+              originalDateStr = dateKey; // The key is the original date string
+              originalEventIndex = index;
+              break;
+            }
         }
       }
     }
     
-    // If blocked, update blocked dates
-    if (eventType === 'blocked' && fullDay) {
-      this.blockedDates[dateStr] = title || 'Unavailable';
-    } else {
-      // Create event object
-      const event = {
+    // Handle date change: Remove event from original date if it changed
+    if (originalDateStr && originalDateStr !== newDateStr && originalEventIndex !== -1) {
+        console.log(`Date changed for event ${existingEventId} from ${originalDateStr} to ${newDateStr}. Removing from old date.`);
+        this.events[originalDateStr].splice(originalEventIndex, 1);
+        // Clean up empty date array
+        if (this.events[originalDateStr].length === 0) {
+            delete this.events[originalDateStr];
+        }
+        originalEventIndex = -1; // Reset index as it's now in a new array (potentially)
+    }
+
+    // Create the event object
+    const event = {
         id: eventId,
-        date: dateStr,
-        title,
+        date: newDateStr, // Store the YYYY-MM-DD string
+        title: title || (eventType === 'blocked' ? 'Unavailable' : 'Untitled Event'), // Default title
         description,
         type: eventType,
         fullDay,
-        startTime,
-        endTime
-      };
-      
-      // Add to events
-      if (!this.events[dateStr]) {
-        this.events[dateStr] = [];
-      }
-      
-      // Check if editing existing event
-      const existingIndex = this.events[dateStr]?.findIndex(e => e.id === eventId);
-      
-      if (existingIndex !== -1) {
-        // Update existing event
-        this.events[dateStr][existingIndex] = event;
-      } else {
-        // Add new event
-        this.events[dateStr].push(event);
-      }
+        // Only include time if not full day
+        ...( !fullDay && { startTime, endTime } ),
+        // Preserve client data if it exists
+        ...( eventData?.clientData && { clientData: eventData.clientData } ) 
+    };
+
+    // Handle specific logic for 'blocked' type
+    if (eventType === 'blocked' && fullDay) {
+        // Add to blockedDates dictionary
+        this.blockedDates[newDateStr] = event.title;
+        console.log(`Blocking date ${newDateStr} with reason: ${event.title}`);
+
+        // If this was previously a different type of event on this date, remove it from events list
+        if (this.events[newDateStr]) {
+             this.events[newDateStr] = this.events[newDateStr].filter(e => e.id !== eventId);
+             if (this.events[newDateStr].length === 0) {
+                delete this.events[newDateStr];
+            }
+        }
+    } else {
+        // Add or update in the events object
+        // Ensure the array exists for the new date
+        if (!this.events[newDateStr]) {
+            this.events[newDateStr] = [];
+        } else if (!Array.isArray(this.events[newDateStr])) {
+            console.warn(`Correcting non-array events for ${newDateStr}`);
+            this.events[newDateStr] = []; // Initialize if corrupt
+        }
+
+        // Find if event already exists on the *new* date
+        let existingIndexOnNewDate = this.events[newDateStr].findIndex(e => e && e.id === eventId);
+
+        if (existingIndexOnNewDate !== -1) {
+            // Update existing event on the potentially new date
+            console.log(`Updating event ${eventId} on date ${newDateStr}`);
+            this.events[newDateStr][existingIndexOnNewDate] = event;
+        } else {
+            // Add as a new event to the new date
+            console.log(`Adding new event ${eventId} to date ${newDateStr}`);
+            this.events[newDateStr].push(event);
+        }
+
+        // If it was previously blocked, unblock the date
+        if (this.blockedDates[newDateStr] && eventType !== 'blocked') {
+             console.log(`Unblocking date ${newDateStr} as event type changed.`);
+             delete this.blockedDates[newDateStr];
+        }
+         // Also unblock the *original* date if the event moved *and* was blocking
+         if (originalDateStr && originalDateStr !== newDateStr && this.blockedDates[originalDateStr] && eventData?.type === 'blocked' && eventData?.fullDay) {
+             console.log(`Unblocking original date ${originalDateStr} as blocking event moved.`);
+             delete this.blockedDates[originalDateStr];
+         }
     }
     
-    // Save changes
-    this.saveAvailability();
-    
-    // Refresh calendar
-    this.renderCalendar();
-    this.renderUpcomingBookings();
-    
-    // Close modal
-    this.eventModal.style.display = 'none';
-    
-    return true;
+    // --- Save changes ---
+    try {
+        await this.saveAvailability();
+        
+        // Refresh calendar and upcoming bookings
+        this.renderCalendar();
+        this.renderUpcomingBookings();
+        
+        // Close modal
+        this.eventModal.style.display = 'none';
+        
+        // Optionally show a success notification
+        // Utils.showNotification('Event saved successfully!', 'success');
+
+        return true;
+
+    } catch (error) {
+        console.error("Error saving availability after saving event:", error);
+        // Show error notification to user
+        // Utils.showNotification('Failed to save event changes. Please try again.', 'error');
+        saveButton.disabled = false; // Re-enable button on save failure
+        return false;
+    }
   },
   
   // Delete event
-  deleteEvent() {
+  async deleteEvent() { // Make async to handle save
     const form = this.eventModal.querySelector('#eventForm');
     const eventId = form.querySelector('#eventId').value;
-    const dateStr = form.querySelector('#eventDate').value;
+    // Get the date string *currently* selected in the modal's date input
+    const currentModalDateStr = form.querySelector('#eventDate').value; 
     
-    if (!eventId || !this.events[dateStr]) {
-      return;
+    if (!eventId) {
+        console.error("Cannot delete event: No event ID found.");
+        return;
     }
-    
+
+    // Find the event across all dates to be sure
+    let eventDateStr = null;
+    let eventIndex = -1;
+    let eventToDelete = null;
+
+    for (const dateKey in this.events) {
+        if (Array.isArray(this.events[dateKey])) {
+            const index = this.events[dateKey].findIndex(e => e && e.id === eventId);
+            if (index !== -1) {
+                eventDateStr = dateKey;
+                eventIndex = index;
+                eventToDelete = this.events[dateKey][index];
+                break;
+            }
+        }
+    }
+
     // Confirm deletion
-    if (confirm('Are you sure you want to delete this event?')) {
-      // Remove event from events
-      this.events[dateStr] = this.events[dateStr].filter(e => e.id !== eventId);
+    const eventTitle = eventToDelete?.title || "this event";
+    if (confirm(`Are you sure you want to delete "${eventTitle}"?`)) {
+        
+        let deleted = false;
+
+        // Check if it's an event in the `events` object
+        if (eventDateStr !== null && eventIndex !== -1) {
+            console.log(`Deleting event ${eventId} from date ${eventDateStr}`);
+            this.events[eventDateStr].splice(eventIndex, 1);
+            
+            // If no events left, remove the date array
+            if (this.events[eventDateStr].length === 0) {
+                delete this.events[eventDateStr];
+            }
+            deleted = true;
+        }
+
+        // Check if it corresponds to a blocked date (using the date from modal)
+        // This handles deleting a 'blocked' type event correctly
+        if (this.blockedDates[currentModalDateStr] && eventToDelete?.type === 'blocked' && eventToDelete?.fullDay) {
+            console.log(`Deleting blocked date ${currentModalDateStr}`);
+            delete this.blockedDates[currentModalDateStr];
+            deleted = true;
+        } else if (this.blockedDates[eventDateStr] && eventToDelete?.type === 'blocked' && eventToDelete?.fullDay) {
+             // Fallback check using found event date string
+             console.log(`Deleting blocked date ${eventDateStr} (fallback check)`);
+             delete this.blockedDates[eventDateStr];
+             deleted = true;
+        }
+
+        if (!deleted) {
+            console.warn(`Could not find event with ID ${eventId} to delete in events or blocked dates.`);
+            // Optionally inform the user
+            return; // Nothing to save
+        }
       
-      // If no events left, remove the date array
-      if (this.events[dateStr].length === 0) {
-        delete this.events[dateStr];
-      }
-      
-      // Save changes
-      this.saveAvailability();
-      
-      // Refresh calendar
-      this.renderCalendar();
-      this.renderUpcomingBookings();
-      
-      // Close modal
-      this.eventModal.style.display = 'none';
+        // Save changes
+        try {
+            await this.saveAvailability();
+            
+            // Refresh calendar and upcoming bookings
+            this.renderCalendar();
+            this.renderUpcomingBookings();
+            
+            // Close modal
+            this.eventModal.style.display = 'none';
+
+             // Show success notification
+             // Utils.showNotification('Event deleted successfully.', 'success');
+
+        } catch (error) {
+            console.error("Error saving availability after deleting event:", error);
+            // Show error notification
+            // Utils.showNotification('Failed to save deletion. Please try again.', 'error');
+        }
     }
   },
   
   // Show event details with improved validation
-  showEventDetails(event) {
+  showEventDetails(event) { // event object should include its original 'date' string
     // Add data validation for event object
-    if (!event || typeof event !== 'object') {
-      console.error('Invalid event object passed to showEventDetails:', event);
+    if (!event || typeof event !== 'object' || !event.date) {
+      console.error('Invalid event object passed to showEventDetails (must include date string):', event);
       return;
     }
     
     // Ensure we have required properties with fallbacks
     const validatedEvent = {
       id: event.id || `event_${Date.now()}`,
-      date: event.date || new Date().toISOString().split('T')[0],
+      date: event.date, // Keep original date string
       title: event.title || 'Untitled Event',
       description: event.description || '',
       type: event.type || 'regular',
@@ -2209,19 +2514,22 @@ const Calendar = {
       clientData: event.clientData || null
     };
     
+    // Parse the date string into a Date object for the modal
+    const eventDateObject = this.parseLocalDate(validatedEvent.date);
+    
     // For booked events, add option to cancel booking
     if (validatedEvent.type === 'booked') {
       // Create a custom modal for booking details with cancel option
-      this.showBookingDetailsModal(validatedEvent);
+      this.showBookingDetailsModal(validatedEvent, eventDateObject); // Pass Date object too
       return;
     }
     
-    // For regular events, show in edit mode
-    this.showEventModal(new Date(validatedEvent.date), validatedEvent);
+    // For regular or blocked events, show in edit mode
+    this.showEventModal(eventDateObject, validatedEvent); // Pass Date object and validated data
   },
   
   // Show booking details modal with cancel option
-  showBookingDetailsModal(event) {
+  showBookingDetailsModal(event, eventDateObject) { // Accepts validated event and Date object
     // Create modal if it doesn't exist
     if (!this.bookingDetailsModal) {
       this.createBookingDetailsModal();
@@ -2230,16 +2538,15 @@ const Calendar = {
     const modal = this.bookingDetailsModal;
     const modalContent = modal.querySelector('.modal-content');
     
-    // Format dates
-    const date = new Date(event.date);
+    // Use the provided Date object for formatting
     const formatOptions = { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' };
-    const formattedDate = date.toLocaleDateString('en-US', formatOptions);
+    const formattedDate = eventDateObject.toLocaleDateString('en-US', formatOptions);
     
     // Get client data if available
     const clientData = event.clientData || {};
     
     // Update modal title and content
-    modalContent.querySelector('.modal-title').textContent = `Booking Details: ${event.title}`;
+    modalContent.querySelector('.modal-title').textContent = `Booking: ${event.title}`;
     
     const detailsContent = modalContent.querySelector('.booking-details-content');
     detailsContent.innerHTML = `
@@ -2249,7 +2556,7 @@ const Calendar = {
       </div>
       <div class="booking-detail-row">
         <div class="booking-detail-label">Project:</div>
-        <div class="booking-detail-value">${clientData.projectName || event.description || 'Unnamed Project'}</div>
+        <div class="booking-detail-value">${clientData.projectName || event.description || 'N/A'}</div>
       </div>
       ${clientData.projectLocation ? `
       <div class="booking-detail-row">
@@ -2264,7 +2571,7 @@ const Calendar = {
       <div class="booking-detail-row">
         <div class="booking-detail-label">Time:</div>
         <div class="booking-detail-value">
-          ${event.fullDay ? 'All Day' : `${event.startTime} - ${event.endTime}`}
+          ${event.fullDay ? 'All Day' : `${event.startTime || 'N/A'} - ${event.endTime || 'N/A'}`}
         </div>
       </div>
       <div class="booking-detail-row">
@@ -2275,7 +2582,7 @@ const Calendar = {
           </span>
         </div>
       </div>
-      ${event.description ? `
+      ${event.description && event.description !== clientData.projectName ? `
       <div class="booking-detail-row">
         <div class="booking-detail-label">Notes:</div>
         <div class="booking-detail-value">${event.description}</div>
@@ -2283,29 +2590,26 @@ const Calendar = {
       ` : ''}
     `;
     
-    // Store event data in modal for reference in cancel function
+    // Store event data in modal for reference in cancel/edit function
     modal.dataset.eventId = event.id;
-    modal.dataset.eventDate = event.date;
+    modal.dataset.eventDateStr = event.date; // Store the original date string
     
     // Show the cancel button
     const cancelBtn = modalContent.querySelector('#cancelBookingBtn');
-    cancelBtn.style.display = 'inline-block';
+    cancelBtn.style.display = 'inline-block'; // Use inline-block for btn-group
     
-    // Also show edit button
+    // Show edit button
     const editBtn = modalContent.querySelector('#editBookingBtn');
-    if (editBtn) {
-      editBtn.style.display = 'inline-block';
+    editBtn.style.display = 'inline-block'; // Use inline-block
       
-      // Remove previous event listeners
-      const newEditBtn = editBtn.cloneNode(true);
-      editBtn.parentNode.replaceChild(newEditBtn, editBtn);
-      
-      // Add event listener
-      newEditBtn.addEventListener('click', () => {
+    // Remove previous event listeners and add new one for EDIT
+    const newEditBtn = editBtn.cloneNode(true); // Clone to remove listeners
+    editBtn.parentNode.replaceChild(newEditBtn, editBtn);
+    newEditBtn.addEventListener('click', () => {
         modal.style.display = 'none';
-        this.showEventModal(new Date(event.date), event);
-      });
-    }
+        // Pass the Date object and event data to the edit modal
+        this.showEventModal(eventDateObject, event); 
+    });
     
     // Show the modal
     modal.style.display = 'flex';
@@ -2365,19 +2669,24 @@ const Calendar = {
     content.innerHTML = `
       <h3 class="modal-title" style="margin-bottom: 1.5rem;">Booking Details</h3>
       
-      <div class="booking-details-content" style="margin-bottom: 1.5rem;">
-        <!-- Booking details will be inserted here -->
-      </div>
+      <div class="booking-details-content" style="margin-bottom: 1.5rem; line-height: 1.6;">
+        </div>
       
-      <div class="btn-group">
-        <button type="button" id="editBookingBtn" class="btn btn-primary">
-          <i class="fas fa-edit"></i> Edit
-        </button>
-        <button type="button" id="cancelBookingBtn" class="btn btn-danger">
-          <i class="fas fa-ban"></i> Cancel Booking
-        </button>
+       <style>
+          .booking-detail-row { display: flex; margin-bottom: 0.5rem; }
+          .booking-detail-label { font-weight: 500; width: 90px; color: var(--gray-600); flex-shrink: 0; }
+          .booking-detail-value { flex-grow: 1; }
+       </style>
+
+      <div class="btn-group" style="justify-content: flex-end;">
         <button type="button" class="btn btn-outline" id="closeBookingDetailsBtn">
           <i class="fas fa-times"></i> Close
+        </button>
+        <button type="button" id="cancelBookingBtn" class="btn btn-danger" style="display: none;">
+          <i class="fas fa-ban"></i> Cancel Booking
+        </button>
+         <button type="button" id="editBookingBtn" class="btn btn-primary" style="display: none;">
+          <i class="fas fa-edit"></i> Edit
         </button>
       </div>
     `;
@@ -2392,9 +2701,17 @@ const Calendar = {
       modal.style.display = 'none';
     });
     
+    // Add listener for CANCEL button (using event delegation might be better if recreating modal often)
     content.querySelector('#cancelBookingBtn').addEventListener('click', () => {
-      this.handleCancelBooking(modal.dataset.eventId, modal.dataset.eventDate);
-      modal.style.display = 'none';
+      // Retrieve stored data
+      const eventId = modal.dataset.eventId;
+      const eventDateStr = modal.dataset.eventDateStr; 
+      if (eventId && eventDateStr) {
+          this.handleCancelBooking(eventId, eventDateStr); // Pass original date string
+          modal.style.display = 'none';
+      } else {
+          console.error("Could not cancel booking: event ID or date string missing from modal data.");
+      }
     });
     
     // Store modal reference
@@ -2402,53 +2719,61 @@ const Calendar = {
   },
   
   // Handle cancel booking
-  handleCancelBooking(eventId, dateStr) {
-    if (!eventId || !dateStr || !this.events[dateStr]) {
+  async handleCancelBooking(eventId, dateStr) { // Expects original date string
+    if (!eventId || !dateStr || !this.events[dateStr] || !Array.isArray(this.events[dateStr])) {
+      console.error(`Cannot cancel booking: Invalid data provided. Event ID: ${eventId}, Date String: ${dateStr}`);
       return;
     }
     
     // Find the event
-    const event = this.events[dateStr].find(e => e.id === eventId);
-    if (!event) {
+    const eventIndex = this.events[dateStr].findIndex(e => e && e.id === eventId);
+    if (eventIndex === -1) {
+      console.error(`Cannot cancel booking: Event with ID ${eventId} not found on date ${dateStr}.`);
       return;
     }
+    const event = this.events[dateStr][eventIndex];
     
     // Confirm cancellation
-    if (confirm(`Are you sure you want to cancel this booking for ${event.title}?`)) {
-      // If this is part of a booking range, ask if all should be cancelled
+    if (confirm(`Are you sure you want to cancel the booking for "${event.title}" on ${dateStr}?`)) {
+      let relatedEventsCancelled = false;
+      
+      // If this is part of a booking range (check clientData), ask if all should be cancelled
       if (event.clientData && event.clientData.projectStartDate && event.clientData.projectEndDate) {
-        const cancelAll = confirm('Cancel all related booking dates for this project?');
+        const cancelAll = confirm(`This booking seems part of a project (${event.clientData.projectStartDate} to ${event.clientData.projectEndDate}). Cancel all related booking dates for this project?`);
         
         if (cancelAll) {
-          // Find and remove all related events
-          Object.keys(this.events).forEach(date => {
-            this.events[date] = this.events[date].filter(e => {
-              if (e.type === 'booked' && e.clientData &&
-                  e.clientData.projectStartDate === event.clientData.projectStartDate &&
-                  e.clientData.projectEndDate === event.clientData.projectEndDate) {
-                // This is a related event, remove it
-                return false;
-              }
-              return true;
-            });
-            
-            // Remove empty date arrays
-            if (this.events[date].length === 0) {
-              delete this.events[date];
+          relatedEventsCancelled = true;
+          const projectStart = event.clientData.projectStartDate;
+          const projectEnd = event.clientData.projectEndDate;
+          
+          // Find and remove all related events by checking clientData linkage
+          Object.keys(this.events).forEach(currentDate => {
+            if (Array.isArray(this.events[currentDate])) {
+                this.events[currentDate] = this.events[currentDate].filter(e => {
+                    // Check if the event is booked and has matching project dates
+                    const isRelated = e && e.type === 'booked' && e.clientData &&
+                                    e.clientData.projectStartDate === projectStart &&
+                                    e.clientData.projectEndDate === projectEnd;
+                    if (isRelated) {
+                        console.log(`Removing related booking event ${e.id} on ${currentDate}`);
+                    }
+                    return !isRelated; // Keep if not related
+                });
+                
+                // Remove empty date arrays
+                if (this.events[currentDate].length === 0) {
+                    delete this.events[currentDate];
+                }
             }
           });
-        } else {
-          // Just remove this specific event
-          this.events[dateStr] = this.events[dateStr].filter(e => e.id !== eventId);
-          
-          // Remove empty date array
-          if (this.events[dateStr].length === 0) {
-            delete this.events[dateStr];
-          }
         }
-      } else {
-        // Remove just this event
-        this.events[dateStr] = this.events[dateStr].filter(e => e.id !== eventId);
+      } 
+      
+      // If only cancelling one or if it wasn't part of a detected range
+      if (!relatedEventsCancelled) {
+        // Remove just this specific event
+        this.events[dateStr].splice(eventIndex, 1);
+        console.log(`Removed single booking event ${eventId} on ${dateStr}`);
         
         // Remove empty date array
         if (this.events[dateStr].length === 0) {
@@ -2457,14 +2782,22 @@ const Calendar = {
       }
       
       // Save changes
-      this.saveAvailability();
-      
-      // Refresh calendar
-      this.renderCalendar();
-      this.renderUpcomingBookings();
-      
-      // Show cancellation notification
-      this.showCancellationNotification(event.title);
+      try {
+          await this.saveAvailability();
+          
+          // Refresh calendar and bookings list
+          this.renderCalendar();
+          this.renderUpcomingBookings();
+          
+          // Show cancellation notification
+          this.showCancellationNotification(event.title);
+          
+      } catch (error) {
+           console.error("Error saving availability after cancelling booking:", error);
+           // Show error notification
+           // Utils.showNotification('Failed to save cancellation. Please try again.', 'error');
+           // Potentially revert the changes locally if save fails? (More complex)
+      }
     }
   },
   
@@ -2479,23 +2812,41 @@ const Calendar = {
       max-width: 400px;
       z-index: 1000;
       animation: slideIn 0.3s ease-out;
+      display: flex; /* For icon alignment */
+      align-items: center; /* For icon alignment */
+      gap: 0.75rem; /* Space between icon and text */
     `;
     
     notification.innerHTML = `
-      <i class="fas fa-ban"></i>
+      <i class="fas fa-ban" style="font-size: 1.2rem;"></i>
       <div>
         <strong>Booking Cancelled</strong>
-        <p>The booking for "${title}" has been cancelled.</p>
+        <p style="margin: 0;">The booking for "${title}" has been cancelled.</p>
       </div>
     `;
     
     document.body.appendChild(notification);
     
+    // CSS Animation for slide in (add if needed)
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+        .cancellation-alert { animation: slideIn 0.3s ease-out; }
+    `;
+    document.head.appendChild(style);
+
     // Remove after 3 seconds
     setTimeout(() => {
       notification.style.opacity = '0';
       notification.style.transition = 'opacity 0.5s';
-      setTimeout(() => notification.remove(), 500);
+      // Remove the style element too if you want to be tidy
+      setTimeout(() => {
+          notification.remove();
+          style.remove(); 
+      }, 500);
     }, 3000);
   },
   
@@ -2506,6 +2857,18 @@ const Calendar = {
       this.createBlockDateModal();
     }
     
+    // Reset fields when showing
+    const blockStartDate = this.modal.querySelector('#blockStartDate');
+    const blockEndDate = this.modal.querySelector('#blockEndDate');
+    const blockReason = this.modal.querySelector('#blockReason');
+
+    const today = new Date().toISOString().split('T')[0];
+    blockStartDate.min = today;
+    blockEndDate.min = today;
+    blockStartDate.value = today; // Default to today
+    blockEndDate.value = today;   // Default to today
+    blockReason.value = '';       // Clear reason
+
     this.modal.style.display = 'flex';
   },
   
@@ -2528,6 +2891,7 @@ const Calendar = {
     `;
     
     const content = document.createElement('div');
+    content.className = 'modal-content'; // Use class for styling consistency
     content.style.cssText = `
       background-color: var(--card-bg);
       border-radius: var(--border-radius);
@@ -2542,6 +2906,7 @@ const Calendar = {
     
     // Add close button
     const closeBtn = document.createElement('div');
+    closeBtn.className = 'modal-close'; // Use class
     closeBtn.innerHTML = '<i class="fas fa-times"></i>';
     closeBtn.style.cssText = `
       position: absolute;
@@ -2560,15 +2925,13 @@ const Calendar = {
       <h3 style="margin-bottom: 1.5rem;">Block Dates</h3>
       
       <div class="form-group">
-        <label for="blockDateRange">Select Date Range</label>
-        <div class="row">
-          <div class="col">
-            <input type="date" id="blockStartDate" class="form-control">
-          </div>
-          <div class="col">
-            <input type="date" id="blockEndDate" class="form-control">
-          </div>
-        </div>
+        <label for="blockStartDate">Start Date</label>
+        <input type="date" id="blockStartDate" class="form-control">
+      </div>
+
+       <div class="form-group">
+        <label for="blockEndDate">End Date</label>
+        <input type="date" id="blockEndDate" class="form-control">
       </div>
       
       <div class="form-group">
@@ -2576,7 +2939,8 @@ const Calendar = {
         <input type="text" id="blockReason" placeholder="e.g. Vacation, Personal, etc.">
       </div>
       
-      <div style="display: flex; justify-content: center; margin-top: 1.5rem;">
+      <div class="btn-group" style="justify-content: flex-end; margin-top: 1.5rem;">
+        <button type="button" id="cancelBlockBtn" class="btn btn-outline">Cancel</button>
         <button id="confirmBlockBtn" class="btn btn-primary">
           <i class="fas fa-ban"></i> Block Dates
         </button>
@@ -2592,64 +2956,100 @@ const Calendar = {
     const blockStartDate = content.querySelector('#blockStartDate');
     const blockEndDate = content.querySelector('#blockEndDate');
     const confirmBlockBtn = content.querySelector('#confirmBlockBtn');
+    const cancelBlockBtn = content.querySelector('#cancelBlockBtn');
     
-    // Set min date to today
+    // Set min date to today initially
     const today = new Date().toISOString().split('T')[0];
     blockStartDate.min = today;
     blockEndDate.min = today;
     
-    // Set initial values to current month
-    blockStartDate.valueAsDate = new Date(this.currentDate.getFullYear(), this.currentDate.getMonth(), this.currentDate.getDate());
-    blockEndDate.valueAsDate = new Date(this.currentDate.getFullYear(), this.currentDate.getMonth(), this.currentDate.getDate());
-    
-    // Handle start date change
+    // Handle start date change to update end date min
     blockStartDate.addEventListener('change', () => {
-      blockEndDate.min = blockStartDate.value;
-      if (blockEndDate.value && blockEndDate.value < blockStartDate.value) {
-        blockEndDate.value = blockStartDate.value;
+      if (blockStartDate.value) {
+        blockEndDate.min = blockStartDate.value;
+        // If end date is before new start date, reset end date
+        if (blockEndDate.value && blockEndDate.value < blockStartDate.value) {
+            blockEndDate.value = blockStartDate.value;
+        }
+      } else {
+         blockEndDate.min = today; // Reset min if start date cleared
       }
     });
     
     // Handle confirm button click
     confirmBlockBtn.addEventListener('click', () => {
       if (!blockStartDate.value || !blockEndDate.value) {
-        alert('Please select a date range');
+        alert('Please select a valid date range.');
         return;
       }
       
-      const startDate = new Date(blockStartDate.value);
-      const endDate = new Date(blockEndDate.value);
-      const reason = content.querySelector('#blockReason').value;
+      const startDate = this.parseLocalDate(blockStartDate.value); // Use helper
+      const endDate = this.parseLocalDate(blockEndDate.value);     // Use helper
+      const reason = content.querySelector('#blockReason').value.trim();
       
-      this.blockDateRange(startDate, endDate, reason);
+      this.blockDateRange(startDate, endDate, reason); // Pass Date objects
       this.modal.style.display = 'none';
+    });
+
+     // Handle cancel button click
+    cancelBlockBtn.addEventListener('click', () => {
+        this.modal.style.display = 'none';
     });
   },
   
   // Block a range of dates
-  async blockDateRange(startDate, endDate, reason = '') {
+  async blockDateRange(startDate, endDate, reason = '') { // Accepts Date objects
     // Clone date to avoid modifying the original
-    let currentDate = new Date(startDate);
-    
-    // Block each day in the range
-    while (currentDate <= endDate) {
-      const dateStr = currentDate.toISOString().split('T')[0];
-      
-      this.blockedDates[dateStr] = reason;
-      
-      // Remove any events for this date
-      if (this.events[dateStr]) {
-        delete this.events[dateStr];
-      }
-      
-      // Move to next day
-      currentDate.setDate(currentDate.getDate() + 1);
+    let currentDate = new Date(startDate.getTime()); // Clone start date
+    const finalDate = new Date(endDate.getTime());   // Clone end date
+
+    let datesToBlock = {};
+    let eventsToRemove = {}; // Store events to remove { dateStr: [eventId1, eventId2] }
+
+    // Identify dates to block and events to remove
+    while (currentDate <= finalDate) {
+        const dateStr = currentDate.toISOString().split('T')[0];
+        datesToBlock[dateStr] = reason || 'Unavailable'; // Use reason or default
+
+        // Mark any existing events on this date for removal
+        if (this.events[dateStr] && Array.isArray(this.events[dateStr])) {
+             eventsToRemove[dateStr] = this.events[dateStr].map(e => e.id); // Get IDs
+        }
+        
+        // Move to next day
+        currentDate.setDate(currentDate.getDate() + 1);
     }
+
+     // Apply the changes
+     Object.assign(this.blockedDates, datesToBlock); // Add new blocked dates
+
+     // Remove the marked events
+     for (const dateStr in eventsToRemove) {
+         if (this.events[dateStr]) {
+             console.log(`Removing ${eventsToRemove[dateStr].length} event(s) from ${dateStr} due to blocking.`);
+             // Filter out events whose IDs were marked for removal
+             this.events[dateStr] = this.events[dateStr].filter(event => 
+                 !eventsToRemove[dateStr].includes(event.id)
+             );
+             // Clean up empty arrays
+             if (this.events[dateStr].length === 0) {
+                 delete this.events[dateStr];
+             }
+         }
+     }
     
-    await this.saveAvailability();
-    this.renderCalendar();
-    
-    alert(`Dates blocked successfully from ${startDate.toLocaleDateString()} to ${endDate.toLocaleDateString()}`);
+    try {
+        await this.saveAvailability();
+        this.renderCalendar(); // Re-render to show changes
+        this.renderUpcomingBookings(); // Update upcoming list too
+
+        alert(`Dates blocked successfully from ${startDate.toLocaleDateString()} to ${endDate.toLocaleDateString()}`);
+
+    } catch (error) {
+        console.error("Error saving availability after blocking dates:", error);
+        alert('Failed to save blocked dates. Please try again.');
+        // Consider reverting local changes if save fails (more complex)
+    }
   },
   
   // Render upcoming bookings with improved event handling
@@ -2660,7 +3060,7 @@ const Calendar = {
     // Clear list
     upcomingBookingsList.innerHTML = '';
     
-    // Get all events and sort by date
+    // Get today's date (normalized)
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
@@ -2669,9 +3069,9 @@ const Calendar = {
     
     // Process each date's events
     Object.keys(this.events).forEach(dateStr => {
-      const eventDate = new Date(dateStr);
+      const eventDate = this.parseLocalDate(dateStr); // Use helper for consistency
       
-      // Only include future events
+      // Only include events from today onwards
       if (eventDate >= today) {
         // Check if we have a valid event array
         if (Array.isArray(this.events[dateStr])) {
@@ -2683,18 +3083,18 @@ const Calendar = {
                 return;
               }
               
-              // Create a validated event with fallbacks
+              // Create a validated event with fallbacks AND the Date object
               const validatedEvent = {
-                id: event.id || `event_${Date.now()}`,
-                date: event.date || dateStr,
+                id: event.id || `event_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+                date: dateStr, // Keep the original date string
                 title: event.title || 'Untitled Event',
                 description: event.description || '',
                 type: event.type || 'regular',
                 fullDay: typeof event.fullDay === 'boolean' ? event.fullDay : false,
-                startTime: event.startTime || '00:00',
-                endTime: event.endTime || '23:59',
+                startTime: event.startTime, // Keep original format or null
+                endTime: event.endTime,     // Keep original format or null
                 clientData: event.clientData || null,
-                dateObj: eventDate
+                dateObj: eventDate // Store the parsed Date object
               };
               
               upcomingEvents.push(validatedEvent);
@@ -2707,6 +3107,22 @@ const Calendar = {
         }
       }
     });
+
+    // Also include upcoming blocked dates as items
+    Object.keys(this.blockedDates).forEach(dateStr => {
+        const blockedDate = this.parseLocalDate(dateStr); // Use helper
+        if (blockedDate >= today) {
+             upcomingEvents.push({
+                id: `blocked_${dateStr}`,
+                date: dateStr,
+                title: this.blockedDates[dateStr] || 'Unavailable',
+                description: '',
+                type: 'blocked',
+                fullDay: true,
+                dateObj: blockedDate
+             });
+        }
+    });
     
     // Sort by date and time
     upcomingEvents.sort((a, b) => {
@@ -2714,12 +3130,12 @@ const Calendar = {
       if (a.dateObj < b.dateObj) return -1;
       if (a.dateObj > b.dateObj) return 1;
       
-      // If same date, sort by time for non-full day events
-      if (!a.fullDay && !b.fullDay) {
+      // If same date, sort non-full day events by start time
+      if (!a.fullDay && !b.fullDay && a.startTime && b.startTime) {
         return a.startTime.localeCompare(b.startTime);
       }
       
-      // Full day events come before timed events
+      // Full day events (including blocked) come before timed events
       if (a.fullDay && !b.fullDay) return -1;
       if (!a.fullDay && b.fullDay) return 1;
       
@@ -2731,14 +3147,15 @@ const Calendar = {
     if (upcomingEvents.length === 0) {
       upcomingBookingsList.innerHTML = `
         <div style="text-align: center; padding: 1.5rem; color: var(--gray-500); font-style: italic;">
-          No upcoming events.
+          No upcoming events or blocked dates.
         </div>
       `;
       return;
     }
     
-    // Add events to list (limit to 10 for performance)
-    upcomingEvents.slice(0, 10).forEach(event => {
+    // Add events to list (limit display, e.g., to 10)
+    const displayLimit = 10;
+    upcomingEvents.slice(0, displayLimit).forEach(event => {
       try {
         const eventItem = document.createElement('div');
         eventItem.className = 'booking-item';
@@ -2748,43 +3165,58 @@ const Calendar = {
           eventItem.classList.add('blocked-item');
         } else if (event.type === 'booked') {
           eventItem.classList.add('booked-item');
-        }
+        } // Regular events have default styling
         
-        // Format date
+        // Format date using the stored Date object
         const options = { month: 'short', day: 'numeric' };
-        const dateStr = event.dateObj.toLocaleDateString('en-US', options);
+        const dateDisplayStr = event.dateObj.toLocaleDateString('en-US', options);
         
         // Format time
         let timeStr = 'All Day';
-        if (!event.fullDay) {
-          // Convert to 12-hour format
-          const formatTime = (timeStr) => {
-            const [hours, minutes] = timeStr.split(':');
+        if (!event.fullDay && event.startTime && event.endTime) {
+          // Convert to 12-hour format if times are valid
+          const formatTime = (timeInput) => {
+            if (!timeInput || !timeInput.includes(':')) return '';
+            const [hours, minutes] = timeInput.split(':');
             const hour = parseInt(hours);
+            if (isNaN(hour) || isNaN(parseInt(minutes))) return ''; // Invalid time part
             const ampm = hour >= 12 ? 'PM' : 'AM';
-            const hour12 = hour % 12 || 12;
-            return `${hour12}:${minutes} ${ampm}`;
+            const hour12 = hour % 12 || 12; // Convert 0 to 12 for 12 AM
+            return `${hour12}:${minutes.padStart(2,'0')} ${ampm}`; // Pad minutes
           };
           
-          timeStr = `${formatTime(event.startTime)} - ${formatTime(event.endTime)}`;
+          const formattedStart = formatTime(event.startTime);
+          const formattedEnd = formatTime(event.endTime);
+          if (formattedStart && formattedEnd) {
+              timeStr = `${formattedStart} - ${formattedEnd}`;
+          } else {
+              timeStr = "Invalid Time"; // Indicate issue
+          }
         }
         
         eventItem.innerHTML = `
           <div>
-            <div class="booking-dates">${dateStr}</div>
+            <div class="booking-dates">${dateDisplayStr}</div>
             <div class="booking-client">${event.title}</div>
             <div class="booking-time">${timeStr}</div>
           </div>
           <div class="booking-status">
             <span class="badge ${event.type === 'blocked' ? 'badge-danger' : event.type === 'booked' ? 'badge-success' : 'badge-primary'}">
-              ${event.type === 'blocked' ? 'Blocked' : event.type === 'booked' ? 'Booked' : 'Event'}
+              ${event.type.charAt(0).toUpperCase() + event.type.slice(1)}
             </span>
           </div>
         `;
         
         // Add click handler to view details
+        // We pass the event object which includes the original 'date' string
         eventItem.addEventListener('click', () => {
-          this.showEventDetails(event);
+          if (event.type === 'blocked') {
+              // Maybe just highlight on calendar or show simple info?
+              // Or open the edit modal directly for the blocked date?
+              this.showEventModal(event.dateObj, event); // Allow editing/unblocking
+          } else {
+              this.showEventDetails(event); // Handles booked/regular types
+          }
         });
         
         upcomingBookingsList.appendChild(eventItem);
@@ -2793,13 +3225,13 @@ const Calendar = {
       }
     });
     
-    // Add "View all" link if more than 10 events
-    if (upcomingEvents.length > 10) {
+    // Add "View all" link if more than the display limit
+    if (upcomingEvents.length > displayLimit) {
       const viewAllItem = document.createElement('div');
       viewAllItem.className = 'view-all-item';
       viewAllItem.innerHTML = `
         <button class="btn btn-outline btn-sm" style="width: 100%; margin-top: 0.5rem;">
-          <i class="fas fa-list"></i> View all ${upcomingEvents.length} upcoming events
+          <i class="fas fa-list"></i> View all ${upcomingEvents.length} upcoming items
         </button>
       `;
       
@@ -2819,47 +3251,60 @@ const Calendar = {
         .booking-item {
           display: flex;
           justify-content: space-between;
-          padding: 1rem;
+          align-items: center; /* Vertically align items */
+          padding: 0.8rem 1rem; /* Adjust padding */
           border-radius: 8px;
           background-color: var(--gray-100);
           margin-bottom: 0.75rem;
           transition: all 0.2s;
-          border-left: 3px solid var(--primary);
+          border-left: 4px solid var(--primary); /* Default border */
           cursor: pointer;
         }
         
         .booking-item:hover {
           transform: translateY(-2px);
           box-shadow: var(--shadow-sm);
+          background-color: var(--gray-200); /* Hover background */
         }
         
         .booking-item.booked-item {
-          border-left: 3px solid #007aff;
+          border-left-color: #007aff; /* Blue for booked */
         }
         
         .booking-item.blocked-item {
-          border-left: 3px solid var(--danger);
+          border-left-color: var(--danger); /* Red for blocked */
+           background-color: rgba(var(--danger-rgb), 0.05); /* Slightly red background */
         }
+         .booking-item.blocked-item:hover {
+             background-color: rgba(var(--danger-rgb), 0.1);
+         }
         
         .booking-dates {
           font-weight: 500;
           margin-bottom: 0.25rem;
+          color: var(--text-color);
         }
         
         .booking-client {
           font-size: 0.875rem;
           color: var(--gray-800);
+          margin-bottom: 0.25rem; /* Space before time */
+          max-width: 250px; /* Prevent overly long titles */
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
         }
         
         .booking-time {
           font-size: 0.75rem;
           color: var(--gray-600);
-          margin-top: 0.25rem;
         }
         
         .booking-status {
           display: flex;
           align-items: center;
+          flex-shrink: 0; /* Prevent status badge from shrinking */
+          margin-left: 0.5rem; /* Space between details and status */
         }
         
         .view-all-item {
@@ -2869,21 +3314,14 @@ const Calendar = {
         
         @media (max-width: 480px) {
           .booking-item {
-            padding: 0.8rem;
+            padding: 0.6rem 0.8rem;
+            flex-direction: column; /* Stack vertically on small screens */
+            align-items: flex-start;
           }
-          
-          .booking-client {
-            font-size: 0.8rem;
-          }
-          
-          .booking-time {
-            font-size: 0.7rem;
-          }
-          
-          .booking-status .badge {
-            font-size: 0.7rem;
-            padding: 0.2rem 0.5rem;
-          }
+          .booking-client { font-size: 0.8rem; max-width: none; }
+          .booking-time { font-size: 0.7rem; }
+          .booking-status { margin-top: 0.5rem; align-self: flex-end; } /* Move status down */
+          .booking-status .badge { font-size: 0.7rem; padding: 0.2rem 0.5rem; }
         }
       `;
       
@@ -2892,7 +3330,7 @@ const Calendar = {
   },
   
   // Show all events modal
-  showAllEventsModal(events) {
+  showAllEventsModal(events) { // events is the sorted list including blocked dates
     // Create modal
     const modal = document.createElement('div');
     modal.className = 'all-events-modal';
@@ -2920,9 +3358,11 @@ const Calendar = {
       width: 100%;
       max-width: 700px;
       max-height: 90vh;
-      overflow-y: auto;
-      padding: 2rem;
+      overflow: hidden; /* Prevent body scroll */
+      padding: 1.5rem 2rem 2rem 2rem; /* Adjust padding */
       position: relative;
+      display: flex; /* Use flexbox for layout */
+      flex-direction: column;
     `;
     
     // Add close button
@@ -2943,37 +3383,46 @@ const Calendar = {
     
     // Add title
     const title = document.createElement('h3');
-    title.textContent = 'All Upcoming Events';
-    title.style.marginBottom = '1.5rem';
+    title.textContent = 'All Upcoming Events & Blocked Dates';
+    title.style.marginBottom = '1rem'; // Reduced margin
+    title.style.flexShrink = '0'; // Prevent shrinking
     
     // Add search input
     const searchContainer = document.createElement('div');
     searchContainer.className = 'search-container';
     searchContainer.style.cssText = `
-      margin-bottom: 1.5rem;
+      margin-bottom: 1rem; /* Reduced margin */
+      flex-shrink: 0; /* Prevent shrinking */
     `;
     
     searchContainer.innerHTML = `
-      <div class="form-group">
-        <label for="eventSearch">Search Events</label>
-        <input type="text" id="eventSearch" placeholder="Filter by title, type, or date...">
+      <div class="form-group no-margin"> <label for="eventSearch" style="display: none;">Search Events</label> <input type="text" id="eventSearch" placeholder="Filter by title, type, or date..." style="width: 100%;">
       </div>
     `;
     
-    // Add events list
+    // Add events list container (make this scrollable)
+    const eventsListContainer = document.createElement('div');
+    eventsListContainer.className = 'all-events-list-container';
+    eventsListContainer.style.cssText = `
+      flex-grow: 1; /* Take remaining space */
+      overflow-y: auto; /* Enable vertical scrolling */
+      padding-right: 0.5rem; /* Space for scrollbar */
+      margin-right: -0.5rem; /* Offset padding */
+      border-top: 1px solid var(--gray-300); /* Separator line */
+      border-bottom: 1px solid var(--gray-300); /* Separator line */
+      padding-top: 1rem; /* Space above list */
+      padding-bottom: 1rem; /* Space below list */
+    `;
+
     const eventsList = document.createElement('div');
     eventsList.className = 'all-events-list';
-    eventsList.style.cssText = `
-      max-height: 60vh;
-      overflow-y: auto;
-      padding-right: 0.5rem;
-    `;
-    
+    // Removed height/overflow styles here, handled by container now
+
     // Add all events to the list
     events.forEach(event => {
       try {
         const eventItem = document.createElement('div');
-        eventItem.className = 'booking-item';
+        eventItem.className = 'booking-item modal-list-item'; // Add new class for specific styling
         
         // Add class based on event type
         if (event.type === 'blocked') {
@@ -2982,54 +3431,64 @@ const Calendar = {
           eventItem.classList.add('booked-item');
         }
         
-        // Format date
+        // Format date using the stored Date object
         const options = { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' };
-        const dateStr = event.dateObj.toLocaleDateString('en-US', options);
+        const dateDisplayStr = event.dateObj.toLocaleDateString('en-US', options);
         
         // Format time
         let timeStr = 'All Day';
-        if (!event.fullDay) {
-          // Convert to 12-hour format
-          const formatTime = (timeStr) => {
-            const [hours, minutes] = timeStr.split(':');
-            const hour = parseInt(hours);
-            const ampm = hour >= 12 ? 'PM' : 'AM';
-            const hour12 = hour % 12 || 12;
-            return `${hour12}:${minutes} ${ampm}`;
-          };
-          
-          timeStr = `${formatTime(event.startTime)} - ${formatTime(event.endTime)}`;
-        }
+         if (!event.fullDay && event.startTime && event.endTime) {
+             const formatTime = (timeInput) => {
+                 if (!timeInput || !timeInput.includes(':')) return '';
+                 const [hours, minutes] = timeInput.split(':');
+                 const hour = parseInt(hours);
+                 if (isNaN(hour) || isNaN(parseInt(minutes))) return '';
+                 const ampm = hour >= 12 ? 'PM' : 'AM';
+                 const hour12 = hour % 12 || 12;
+                 return `${hour12}:${minutes.padStart(2,'0')} ${ampm}`;
+             };
+             const formattedStart = formatTime(event.startTime);
+             const formattedEnd = formatTime(event.endTime);
+             if (formattedStart && formattedEnd) {
+                 timeStr = `${formattedStart} - ${formattedEnd}`;
+             } else {
+                 timeStr = "Invalid Time";
+             }
+         }
         
         // Add more details for the all events view
         eventItem.innerHTML = `
-          <div>
-            <div class="booking-dates">${dateStr}</div>
+          <div class="booking-details-main">
+            <div class="booking-dates">${dateDisplayStr}</div>
             <div class="booking-client">${event.title}</div>
             <div class="booking-time">${timeStr}</div>
             ${event.description ? `<div class="booking-description">${event.description}</div>` : ''}
           </div>
           <div class="booking-status">
             <span class="badge ${event.type === 'blocked' ? 'badge-danger' : event.type === 'booked' ? 'badge-success' : 'badge-primary'}">
-              ${event.type === 'blocked' ? 'Blocked' : event.type === 'booked' ? 'Booked' : 'Event'}
+              ${event.type.charAt(0).toUpperCase() + event.type.slice(1)}
             </span>
           </div>
         `;
         
-        // Add data attributes for filtering
+        // Add data attributes for filtering (use original date string for searching)
         eventItem.dataset.title = event.title.toLowerCase();
         eventItem.dataset.type = event.type.toLowerCase();
-        eventItem.dataset.date = dateStr.toLowerCase();
+        eventItem.dataset.date = event.date.toLowerCase(); // Use YYYY-MM-DD for search consistency
+        eventItem.dataset.displayDate = dateDisplayStr.toLowerCase(); // Allow searching formatted date too
         eventItem.dataset.description = event.description ? event.description.toLowerCase() : '';
         
         // Add click handler to view details
         eventItem.addEventListener('click', () => {
-          this.showEventDetails(event);
-          
-          // Close modal after selecting an event
+           if (event.type === 'blocked') {
+               this.showEventModal(event.dateObj, event); // Allow editing/unblocking
+           } else {
+               this.showEventDetails(event); // Handles booked/regular
+           }
+          // Close this modal after selecting an event
           setTimeout(() => {
             modal.remove();
-          }, 100);
+          }, 100); // Small delay to allow action
         });
         
         eventsList.appendChild(eventItem);
@@ -3037,79 +3496,104 @@ const Calendar = {
         console.error('Error rendering event in all events list:', error, event);
       }
     });
+
+    // Append list to its scrollable container
+    eventsListContainer.appendChild(eventsList);
     
-    // Add event listener for search filter
+    // Add elements to modal content
     content.appendChild(title);
     content.appendChild(searchContainer);
-    content.appendChild(eventsList);
+    content.appendChild(eventsListContainer); // Add the scrollable container
     content.appendChild(closeBtn);
     modal.appendChild(content);
     document.body.appendChild(modal);
     
     // Add search functionality
-    const searchInput = document.getElementById('eventSearch');
+    const searchInput = content.querySelector('#eventSearch'); // Search within modal content
     searchInput.addEventListener('input', () => {
-      const searchTerm = searchInput.value.toLowerCase();
+      const searchTerm = searchInput.value.toLowerCase().trim();
       const items = eventsList.querySelectorAll('.booking-item');
       
       items.forEach(item => {
-        const title = item.dataset.title;
-        const type = item.dataset.type;
-        const date = item.dataset.date;
-        const description = item.dataset.description;
+        const title = item.dataset.title || '';
+        const type = item.dataset.type || '';
+        const date = item.dataset.date || '';
+        const displayDate = item.dataset.displayDate || '';
+        const description = item.dataset.description || '';
         
-        // Show/hide based on search term
+        // Show/hide based on search term matching any data attribute
         if (
           title.includes(searchTerm) || 
           type.includes(searchTerm) || 
           date.includes(searchTerm) ||
+          displayDate.includes(searchTerm) ||
           description.includes(searchTerm)
         ) {
-          item.style.display = 'flex';
+          item.style.display = 'flex'; // Use flex to match booking-item style
         } else {
           item.style.display = 'none';
         }
       });
     });
     
-    // Add custom styles for the modal
-    const style = document.createElement('style');
-    style.textContent = `
-      .all-events-list {
-        scrollbar-width: thin;
-        scrollbar-color: var(--gray-400) transparent;
-      }
-      
-      .all-events-list::-webkit-scrollbar {
-        width: 6px;
-      }
-      
-      .all-events-list::-webkit-scrollbar-track {
-        background: transparent;
-      }
-      
-      .all-events-list::-webkit-scrollbar-thumb {
-        background-color: var(--gray-400);
-        border-radius: 6px;
-      }
-      
-      .booking-description {
-        font-size: 0.75rem;
-        color: var(--gray-600);
-        margin-top: 0.25rem;
-        white-space: nowrap;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        max-width: 300px;
-      }
-      
-      @media (max-width: 480px) {
-        .booking-description {
-          max-width: 200px;
-        }
-      }
-    `;
-    document.head.appendChild(style);
+    // Add custom styles for the modal list items if not already added
+    if (!document.getElementById('all-events-modal-styles')) {
+        const style = document.createElement('style');
+        style.id = 'all-events-modal-styles';
+        style.textContent = `
+          .all-events-list-container {
+            scrollbar-width: thin;
+            scrollbar-color: var(--gray-400) transparent;
+          }
+          
+          .all-events-list-container::-webkit-scrollbar {
+            width: 8px; /* Slightly wider scrollbar */
+          }
+          
+          .all-events-list-container::-webkit-scrollbar-track {
+            background: transparent;
+            margin: 1rem 0; /* Match padding */
+          }
+          
+          .all-events-list-container::-webkit-scrollbar-thumb {
+            background-color: var(--gray-400);
+            border-radius: 6px;
+            border: 2px solid var(--card-bg); /* Match background */
+          }
+
+          .modal-list-item {
+             margin-bottom: 0.5rem; /* Tighter spacing in list */
+             border-left-width: 3px; /* Slightly thinner border */
+             padding: 0.6rem 0.8rem;
+          }
+          
+          .modal-list-item .booking-description {
+            font-size: 0.7rem;
+            color: var(--gray-600);
+            margin-top: 0.15rem;
+            white-space: nowrap; /* Keep description short */
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 350px; /* Limit width */
+          }
+
+          .modal-list-item .booking-details-main {
+              flex-grow: 1; /* Allow main details to take space */
+              overflow: hidden; /* Prevent long content breaking layout */
+          }
+
+          /* Responsive adjustments for modal list */
+          @media (max-width: 480px) {
+             .modal-list-item {
+                 padding: 0.5rem 0.6rem;
+                 /* Keep flex-row for better scanning in modal */
+             }
+             .modal-list-item .booking-client { font-size: 0.75rem; }
+             .modal-list-item .booking-description { max-width: 180px; font-size: 0.65rem;}
+          }
+        `;
+        document.head.appendChild(style);
+    }
     
     // Focus the search input
     setTimeout(() => {
@@ -3124,101 +3608,114 @@ const Calendar = {
       'BEGIN:VCALENDAR',
       'VERSION:2.0',
       'PRODID:-//LuminaryOps//Calendar//EN',
-      `X-WR-CALNAME:LuminaryOps Calendar`,
-      'X-WR-TIMEZONE:UTC',
+      `X-WR-CALNAME:LuminaryOps Calendar`, // Calendar Name
+      'X-WR-TIMEZONE:UTC', // Standard practice to use UTC
       'CALSCALE:GREGORIAN',
       'METHOD:PUBLISH'
     ];
     
-    // Add blocked dates
+    const nowISO = new Date().toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+
+    // Add blocked dates as VEVENTs
     Object.keys(this.blockedDates).forEach(dateStr => {
       const reason = this.blockedDates[dateStr] || 'Unavailable';
+      const date = this.parseLocalDate(dateStr); // Use helper
+
+      // Create UTC date strings for iCal DATE format (YYYYMMDD)
+      const startDateUTCStr = dateStr.replace(/-/g, '');
       
-      // Create date objects for start and end of day
-      const startDate = new Date(dateStr);
-      const endDate = new Date(dateStr);
-      endDate.setDate(endDate.getDate() + 1);
-      
-      // Format dates for iCal
-      const start = startDate.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
-      const end = endDate.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
-      
-      // Add event
+      // For a full day DATE type, DTEND is the day *after* the last day
+      const endDate = new Date(date.getTime());
+      endDate.setDate(date.getDate() + 1);
+      const endDateUTCStr = endDate.toISOString().split('T')[0].replace(/-/g, '');
+
       icalContent = icalContent.concat([
         'BEGIN:VEVENT',
-        `UID:blocked-${dateStr}@luminaryops.com`,
-        `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '')}`,
-        `DTSTART;VALUE=DATE:${dateStr.replace(/-/g, '')}`,
-        `DTEND;VALUE=DATE:${dateStr.replace(/-/g, '')}`,
-        `SUMMARY:${reason}`,
-        'CATEGORIES:BLOCKED',
-        'TRANSP:OPAQUE',
+        `UID:blocked-${dateStr}@luminaryops.com`, // Unique ID
+        `DTSTAMP:${nowISO}`, // Timestamp of export
+        `DTSTART;VALUE=DATE:${startDateUTCStr}`, // Start date (full day)
+        `DTEND;VALUE=DATE:${endDateUTCStr}`,     // End date (exclusive, full day)
+        `SUMMARY:${reason}`, // Title
+        'CATEGORIES:BLOCKED', // Category
+        'TRANSP:OPAQUE', // Shows as busy
+        'STATUS:CONFIRMED',
         'END:VEVENT'
       ]);
     });
     
-    // Add events
+    // Add events from the events object
     Object.keys(this.events).forEach(dateStr => {
       // Ensure this.events[dateStr] is an array
       if (!Array.isArray(this.events[dateStr])) {
-        console.warn(`Events for date ${dateStr} is not an array:`, this.events[dateStr]);
-        return;
+        console.warn(`Events for date ${dateStr} is not an array during export:`, this.events[dateStr]);
+        return; // Skip this date if data is corrupt
       }
       
       this.events[dateStr].forEach(event => {
         try {
           // Validate event
-          if (!event || typeof event !== 'object') {
+          if (!event || typeof event !== 'object' || !event.id) {
             console.error('Invalid event object in export:', event);
             return;
           }
           
           // Get required properties with fallbacks
-          const eventId = event.id || `event_${Date.now()}`;
+          const eventId = event.id;
           const eventTitle = event.title || 'Untitled Event';
           const eventDescription = event.description || '';
           const eventType = event.type || 'regular';
           const fullDay = event.fullDay === true;
-          const startTime = event.startTime || '00:00';
-          const endTime = event.endTime || '23:59';
+          const startTime = event.startTime; // May be null/undefined
+          const endTime = event.endTime;     // May be null/undefined
           
-          // Create date objects for start and end
-          const startDate = new Date(dateStr);
-          const endDate = new Date(dateStr);
+          // Create date objects using the helper function
+          const eventDate = this.parseLocalDate(dateStr); 
           
-          // Handle full day vs. timed events
-          let start, end;
+          // Format DTSTART and DTEND
+          let dtStartStr, dtEndStr;
           if (fullDay) {
-            // Full day event
-            start = `${dateStr.replace(/-/g, '')}`;
-            endDate.setDate(endDate.getDate() + 1);
-            end = `${endDate.toISOString().split('T')[0].replace(/-/g, '')}`;
-          } else {
-            // Timed event
-            const [startHour, startMinute] = startTime.split(':');
-            const [endHour, endMinute] = endTime.split(':');
-            startDate.setHours(parseInt(startHour), parseInt(startMinute), 0);
-            endDate.setHours(parseInt(endHour), parseInt(endMinute), 0);
+            // Full day event (VALUE=DATE)
+            dtStartStr = `DTSTART;VALUE=DATE:${dateStr.replace(/-/g, '')}`;
             
-            start = startDate.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
-            end = endDate.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+            // DTEND for full day is the start of the next day
+            const nextDay = new Date(eventDate.getTime());
+            nextDay.setDate(eventDate.getDate() + 1);
+            const nextDayStr = nextDay.toISOString().split('T')[0].replace(/-/g, '');
+            dtEndStr = `DTEND;VALUE=DATE:${nextDayStr}`;
+          } else if (startTime && endTime) {
+            // Timed event (DateTime in UTC)
+            const startDateTime = new Date(eventDate.getTime());
+            const [startHour, startMinute] = startTime.split(':').map(Number);
+            startDateTime.setHours(startHour, startMinute, 0, 0); // Set local time
+
+            const endDateTime = new Date(eventDate.getTime());
+            const [endHour, endMinute] = endTime.split(':').map(Number);
+            endDateTime.setHours(endHour, endMinute, 0, 0); // Set local time
+
+            // Convert to UTC string format YYYYMMDDTHHMMSSZ
+            dtStartStr = `DTSTART:${startDateTime.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z'}`;
+            dtEndStr = `DTEND:${endDateTime.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z'}`;
+          } else {
+             console.warn(`Skipping event ${eventId} due to missing times for non-full-day event.`);
+             return; // Skip if timed event has no times
           }
           
-          // Add event to iCal
+          // Add event to iCal content
           icalContent = icalContent.concat([
             'BEGIN:VEVENT',
-            `UID:${eventId}@luminaryops.com`,
-            `DTSTAMP:${new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '')}`,
-            fullDay ? `DTSTART;VALUE=DATE:${start}` : `DTSTART:${start}`,
-            fullDay ? `DTEND;VALUE=DATE:${end}` : `DTEND:${end}`,
-            `SUMMARY:${eventTitle}`,
-            eventDescription ? `DESCRIPTION:${eventDescription.replace(/\n/g, '\\n')}` : '',
-            `CATEGORIES:${eventType.toUpperCase()}`,
-            'TRANSP:OPAQUE',
+            `UID:${eventId}@luminaryops.com`, // Ensure unique ID
+            `DTSTAMP:${nowISO}`, // Timestamp
+            dtStartStr, // Start date/time
+            dtEndStr,   // End date/time
+            `SUMMARY:${eventTitle.replace(/[,;]/g, '\\,')}`, // Escape commas/semicolons in summary
+            eventDescription ? `DESCRIPTION:${eventDescription.replace(/\n/g, '\\n').replace(/[,;]/g, '\\,')}` : '', // Escape newlines and commas/semicolons
+            `CATEGORIES:${eventType.toUpperCase()}`, // Category based on type
+            'TRANSP:OPAQUE', // Show as busy
+            'STATUS:CONFIRMED',
             'END:VEVENT'
-          ].filter(line => line !== '')); // Remove empty lines
+          ].filter(line => line !== '')); // Remove empty lines (like empty description)
         } catch (error) {
-          console.error('Error exporting event:', error, event);
+          console.error(`Error exporting event ${event?.id || 'unknown'}:`, error, event);
         }
       });
     });
@@ -3227,7 +3724,7 @@ const Calendar = {
     icalContent.push('END:VCALENDAR');
     
     // Create download link
-    const blob = new Blob([icalContent.join('\r\n')], { type: 'text/calendar' });
+    const blob = new Blob([icalContent.join('\r\n')], { type: 'text/calendar;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -3237,219 +3734,247 @@ const Calendar = {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url); // Clean up blob URL
     
-    // Show success message
-    const notification = document.createElement('div');
-    notification.className = 'alert alert-success';
-    notification.style.cssText = `
-      position: fixed;
-      bottom: 20px;
-      right: 20px;
-      max-width: 400px;
-      z-index: 1000;
-      animation: slideIn 0.3s ease-out;
-    `;
-    
-    notification.innerHTML = `
-      <i class="fas fa-calendar-check"></i>
-      <div>
-        <strong>Calendar Exported</strong>
-        <p>Your calendar has been exported successfully.</p>
-      </div>
-    `;
-    
-    document.body.appendChild(notification);
-    
-    // Remove after 3 seconds
-    setTimeout(() => {
-      notification.style.opacity = '0';
-      notification.style.transition = 'opacity 0.5s';
-      setTimeout(() => notification.remove(), 500);
-    }, 3000);
+    // Show success message (using a simple alert or your notification system)
+    alert('Calendar exported successfully as luminaryops_calendar.ics');
+
+    // Optional: Use a more sophisticated notification if available
+    // Utils.showNotification('Calendar exported successfully!', 'success');
   },
   
   // Book a date range for a client with improved error handling
-  async bookDateRange(startDate, endDate, clientData) {
+  async bookDateRange(startDate, endDate, clientData) { // Expects Date objects
     try {
       // Validate inputs
-      if (!startDate || !endDate || !clientData) {
+      if (!startDate || !endDate || !(startDate instanceof Date) || !(endDate instanceof Date) || !clientData) {
         console.error('Invalid inputs for bookDateRange:', { startDate, endDate, clientData });
+        alert('Booking failed: Invalid date or client data provided.');
         return false;
       }
+
+      // Ensure start is before or same as end
+      if (startDate > endDate) {
+           console.error('Booking failed: Start date is after end date.');
+           alert('Booking failed: Start date cannot be after end date.');
+           return false;
+      }
       
-      // Clone date to avoid modifying the original
-      let currentDate = new Date(startDate);
+      // Clone dates to avoid modifying originals
+      let currentDate = new Date(startDate.getTime());
+      const finalDate = new Date(endDate.getTime());
+      const startDateStr = startDate.toISOString().split('T')[0]; // For clientData
+      const endDateStr = endDate.toISOString().split('T')[0];     // For clientData
+
+      // Create unique ID for this booking set
+      const bookingSetId = `booking_${Date.now()}`;
       
-      // Create unique ID for this booking
-      const bookingId = `booking_${Date.now()}`;
-      
-      // Book each day in the range
-      while (currentDate <= endDate) {
+      let newEvents = {}; // Store new events temporarily { dateStr: [event1, event2] }
+      let conflicts = false; // Flag for conflicts
+
+      // Check for conflicts first before creating events
+      let checkDate = new Date(startDate.getTime());
+      while (checkDate <= finalDate) {
+           const checkDateStr = checkDate.toISOString().split('T')[0];
+           if (this.blockedDates[checkDateStr]) {
+               conflicts = true;
+               alert(`Booking conflict: Date ${checkDateStr} is blocked (${this.blockedDates[checkDateStr]}).`);
+               break;
+           }
+           if (this.events[checkDateStr] && this.events[checkDateStr].some(e => e.fullDay)) {
+                conflicts = true;
+                alert(`Booking conflict: Date ${checkDateStr} already has a full-day event.`);
+                break;
+           }
+           checkDate.setDate(checkDate.getDate() + 1);
+      }
+
+      if (conflicts) {
+           console.error("Booking failed due to conflicts.");
+           return false; // Stop if conflicts found
+      }
+
+      // If no conflicts, proceed to create events
+      currentDate = new Date(startDate.getTime()); // Reset current date
+      while (currentDate <= finalDate) {
         const dateStr = currentDate.toISOString().split('T')[0];
         
-        // Create a booking event
-        if (!this.events[dateStr]) {
-          this.events[dateStr] = [];
+        // Initialize array if it doesn't exist
+        if (!newEvents[dateStr]) {
+          newEvents[dateStr] = [];
         }
         
-        // Ensure events[dateStr] is an array
-        if (!Array.isArray(this.events[dateStr])) {
-          console.warn(`Events for date ${dateStr} is not an array, initializing as empty array`);
-          this.events[dateStr] = [];
-        }
-        
-        // Add booking event with validated properties
-        this.events[dateStr].push({
-          id: `${bookingId}_${dateStr}`,
+        // Create the booking event object
+        const bookingEvent = {
+          id: `${bookingSetId}_${dateStr}`, // Unique ID per day
           date: dateStr,
-          title: clientData.clientName || 'Unnamed Client',
-          description: clientData.projectName || 'Unnamed Project',
+          title: clientData.clientName || 'Booking', // Use client name or default
+          description: clientData.projectName || '', // Project name as description
           type: 'booked',
-          fullDay: true,
-          startTime: '00:00',
-          endTime: '23:59',
-          clientData: {
-            ...clientData,
-            projectStartDate: startDate.toISOString().split('T')[0],
-            projectEndDate: endDate.toISOString().split('T')[0]
+          fullDay: true, // Assume full day bookings for ranges
+          clientData: { // Store related client info
+            ...clientData, // Include all provided client data
+            bookingSetId: bookingSetId, // Link events in this booking
+            projectStartDate: startDateStr,
+            projectEndDate: endDateStr,
+            depositPaid: clientData.depositPaid || false // Default payment status
           }
-        });
+          // No startTime/endTime needed for fullDay
+        };
+        
+        newEvents[dateStr].push(bookingEvent);
         
         // Move to next day
         currentDate.setDate(currentDate.getDate() + 1);
       }
       
-      await this.saveAvailability();
-      
-      // Add travel days if needed
+      // Add travel days if specified
       if (clientData.travelDays && clientData.travelDays > 0) {
-        // Add travel days before start date
-        let beforeTravel = new Date(startDate);
-        beforeTravel.setDate(beforeTravel.getDate() - clientData.travelDays);
-        
-        for (let i = 0; i < clientData.travelDays; i++) {
-          const travelDateStr = beforeTravel.toISOString().split('T')[0];
+          const travelDays = parseInt(clientData.travelDays, 10);
           
-          if (!this.events[travelDateStr]) {
-            this.events[travelDateStr] = [];
+          // Add travel days *before* start date
+          for (let i = 1; i <= travelDays; i++) {
+              let travelDate = new Date(startDate.getTime());
+              travelDate.setDate(startDate.getDate() - i);
+              const travelDateStr = travelDate.toISOString().split('T')[0];
+
+              // Check for conflicts on travel days too
+              if (this.blockedDates[travelDateStr] || (this.events[travelDateStr] && this.events[travelDateStr].some(e => e.fullDay))) {
+                   console.warn(`Skipping travel day ${travelDateStr} due to conflict.`);
+                   continue; // Skip this travel day
+              }
+
+              if (!newEvents[travelDateStr]) newEvents[travelDateStr] = [];
+              
+              newEvents[travelDateStr].push({
+                  id: `${bookingSetId}_travel_before_${i}`,
+                  date: travelDateStr,
+                  title: `Travel: ${clientData.clientName || 'Booking'}`,
+                  description: `Travel day for ${clientData.projectName || ''}`,
+                  type: 'booked', // Treat travel as booked time
+                  fullDay: true,
+                  clientData: { 
+                      ...clientData, 
+                      bookingSetId: bookingSetId, 
+                      isTravel: true, 
+                      travelLabel: 'Travel Day (Before)',
+                      projectStartDate: startDateStr, 
+                      projectEndDate: endDateStr 
+                  }
+              });
           }
-          
-          // Ensure events[travelDateStr] is an array
-          if (!Array.isArray(this.events[travelDateStr])) {
-            console.warn(`Events for travel date ${travelDateStr} is not an array, initializing as empty array`);
-            this.events[travelDateStr] = [];
+
+          // Add travel days *after* end date
+           for (let i = 1; i <= travelDays; i++) {
+              let travelDate = new Date(finalDate.getTime()); // Use finalDate (end date)
+              travelDate.setDate(finalDate.getDate() + i);
+              const travelDateStr = travelDate.toISOString().split('T')[0];
+
+              // Check for conflicts on travel days too
+              if (this.blockedDates[travelDateStr] || (this.events[travelDateStr] && this.events[travelDateStr].some(e => e.fullDay))) {
+                   console.warn(`Skipping travel day ${travelDateStr} due to conflict.`);
+                   continue; // Skip this travel day
+              }
+
+              if (!newEvents[travelDateStr]) newEvents[travelDateStr] = [];
+              
+              newEvents[travelDateStr].push({
+                  id: `${bookingSetId}_travel_after_${i}`,
+                  date: travelDateStr,
+                  title: `Travel: ${clientData.clientName || 'Booking'}`,
+                  description: `Travel day for ${clientData.projectName || ''}`,
+                  type: 'booked',
+                  fullDay: true,
+                  clientData: { 
+                      ...clientData, 
+                      bookingSetId: bookingSetId, 
+                      isTravel: true, 
+                      travelLabel: 'Travel Day (After)',
+                      projectStartDate: startDateStr, 
+                      projectEndDate: endDateStr 
+                  }
+              });
           }
-          
-          this.events[travelDateStr].push({
-            id: `${bookingId}_travel_before_${i}`,
-            date: travelDateStr,
-            title: `Travel: ${clientData.clientName || 'Unnamed Client'}`,
-            description: `Travel day for ${clientData.projectName || 'Unnamed Project'}`,
-            type: 'booked',
-            fullDay: true,
-            startTime: '00:00',
-            endTime: '23:59',
-            clientData: {
-              ...clientData,
-              isTravel: true,
-              travelLabel: 'Travel Day',
-              projectStartDate: startDate.toISOString().split('T')[0],
-              projectEndDate: endDate.toISOString().split('T')[0]
-            }
-          });
-          
-          beforeTravel.setDate(beforeTravel.getDate() + 1);
-        }
-        
-        // Add travel days after end date
-        let afterTravel = new Date(endDate);
-        afterTravel.setDate(afterTravel.getDate() + 1);
-        
-        for (let i = 0; i < clientData.travelDays; i++) {
-          const travelDateStr = afterTravel.toISOString().split('T')[0];
-          
-          if (!this.events[travelDateStr]) {
-            this.events[travelDateStr] = [];
+      }
+
+      // Merge new events into the main events object
+      for (const dateStr in newEvents) {
+          if (!this.events[dateStr]) {
+              this.events[dateStr] = [];
           }
-          
-          // Ensure events[travelDateStr] is an array
-          if (!Array.isArray(this.events[travelDateStr])) {
-            console.warn(`Events for travel date ${travelDateStr} is not an array, initializing as empty array`);
-            this.events[travelDateStr] = [];
-          }
-          
-          this.events[travelDateStr].push({
-            id: `${bookingId}_travel_after_${i}`,
-            date: travelDateStr,
-            title: `Travel: ${clientData.clientName || 'Unnamed Client'}`,
-            description: `Travel day for ${clientData.projectName || 'Unnamed Project'}`,
-            type: 'booked',
-            fullDay: true,
-            startTime: '00:00',
-            endTime: '23:59',
-            clientData: {
-              ...clientData,
-              isTravel: true,
-              travelLabel: 'Travel Day',
-              projectStartDate: startDate.toISOString().split('T')[0],
-              projectEndDate: endDate.toISOString().split('T')[0]
-            }
-          });
-          
-          afterTravel.setDate(afterTravel.getDate() + 1);
-        }
-        
-        await this.saveAvailability();
+           // Ensure it's an array before pushing
+           if (Array.isArray(this.events[dateStr])) {
+               this.events[dateStr].push(...newEvents[dateStr]);
+           } else {
+                console.warn(`Correcting non-array events for ${dateStr} before adding booking.`);
+                this.events[dateStr] = [...newEvents[dateStr]]; // Replace if corrupt
+           }
       }
       
-      // Refresh calendar
+      // Save the updated availability
+      await this.saveAvailability();
+      
+      // Refresh calendar display
       this.renderCalendar();
       this.renderUpcomingBookings();
-      
-      return true;
+
+      console.log(`Booking successful for ${clientData.clientName} from ${startDateStr} to ${endDateStr}`);
+      return true; // Indicate success
+
     } catch (error) {
       console.error('Error booking date range:', error);
-      return false;
+      alert(`An error occurred while booking: ${error.message}`);
+      return false; // Indicate failure
     }
   },
   
-  // Update payment status for a booking
-  async updateBookingPaymentStatus(startDate, endDate, isPaid) {
+  // Update payment status for a booking set (using bookingSetId)
+  async updateBookingPaymentStatus(bookingSetId, isPaid) {
     try {
-      // Clone date to avoid modifying the original
-      let currentDate = new Date(startDate);
-      
-      // Update each day in the range
-      while (currentDate <= endDate) {
-        const dateStr = currentDate.toISOString().split('T')[0];
-        
-        // Update events
-        if (this.events[dateStr] && Array.isArray(this.events[dateStr])) {
-          this.events[dateStr].forEach(event => {
-            if (event.type === 'booked' && event.clientData) {
-              event.clientData.depositPaid = isPaid;
-              
-              // Update title to reflect payment status
-              if (isPaid && !event.title.includes('(Paid)')) {
-                event.title += ' (Paid)';
-              }
+        let updated = false;
+        console.log(`Updating payment status for booking set ${bookingSetId} to: ${isPaid}`);
+
+        // Iterate through all dates and events to find matching bookingSetId
+        for (const dateStr in this.events) {
+            if (Array.isArray(this.events[dateStr])) {
+                this.events[dateStr].forEach(event => {
+                    // Check if the event is booked and belongs to the target booking set
+                    if (event && event.type === 'booked' && event.clientData && event.clientData.bookingSetId === bookingSetId) {
+                        
+                        // Update the depositPaid status
+                        if (event.clientData.depositPaid !== isPaid) {
+                             event.clientData.depositPaid = isPaid;
+                             updated = true;
+                             console.log(`Updated payment status for event ${event.id} on ${dateStr}`);
+
+                             // Optional: Update title to reflect payment (consider if this is desired)
+                             // if (isPaid && !event.title.includes('(Paid)')) {
+                             //     event.title += ' (Paid)';
+                             // } else if (!isPaid && event.title.includes('(Paid)')) {
+                             //      event.title = event.title.replace(/\s*\(Paid\)/, '');
+                             // }
+                        }
+                    }
+                });
             }
-          });
         }
-        
-        // Move to next day
-        currentDate.setDate(currentDate.getDate() + 1);
+      
+      if (updated) {
+          await this.saveAvailability();
+          
+          // Refresh calendar and list
+          this.renderCalendar();
+          this.renderUpcomingBookings();
+          console.log(`Payment status update saved for booking set ${bookingSetId}.`);
+          return true;
+      } else {
+          console.log(`No events found or status already matched for booking set ${bookingSetId}. No update needed.`);
+          return false; // Indicate no changes were made
       }
       
-      await this.saveAvailability();
-      
-      // Refresh calendar
-      this.renderCalendar();
-      this.renderUpcomingBookings();
-      
-      return true;
     } catch (error) {
       console.error('Error updating booking payment status:', error);
+      alert(`Failed to update payment status: ${error.message}`);
       return false;
     }
   },
@@ -3461,148 +3986,316 @@ const Calendar = {
     try {
       console.log('Testing calendar data persistence...');
       
-      // 1. Create a test event
-      const testDate = new Date().toISOString().split('T')[0];
-      if (!this.events[testDate]) {
-        this.events[testDate] = [];
-      }
-      
+      // 1. Store current state to restore later
+      const originalEvents = JSON.parse(JSON.stringify(this.events));
+      const originalBlocked = JSON.parse(JSON.stringify(this.blockedDates));
+
+      // 2. Create a unique test event
+      const testDateStr = new Date().toISOString().split('T')[0];
+      const testEventId = `test_event_${Date.now()}`;
       const testEvent = {
-        id: `test_event_${Date.now()}`,
-        date: testDate,
+        id: testEventId,
+        date: testDateStr,
         title: `Test Event ${new Date().toLocaleTimeString()}`,
         description: 'This is a test event to validate storage',
         type: 'regular',
-        fullDay: true,
-        startTime: '00:00',
-        endTime: '23:59'
+        fullDay: true
       };
       
-      // Add test event
-      this.events[testDate].push(testEvent);
+      // 3. Add test event to a temporary copy
+      let testEvents = JSON.parse(JSON.stringify(this.events));
+      if (!testEvents[testDateStr]) {
+        testEvents[testDateStr] = [];
+      }
+       // Ensure array before push
+       if (!Array.isArray(testEvents[testDateStr])) testEvents[testDateStr] = [];
+      testEvents[testDateStr].push(testEvent);
       
-      // 2. Save to Firebase
+      // 4. Save this temporary state
       console.log('Saving test event:', testEvent);
-      await this.saveAvailability();
+      const testData = { events: testEvents, blockedDates: this.blockedDates, bookedDates: this.bookedDates };
       
-      // 3. Clear local data
+      // Determine save method (Firebase or localStorage)
+       if (AppState.usingFirebase) {
+           await FirebaseStorage.saveCalendarData(testData);
+           console.log("Saved test data to Firebase.");
+       } else {
+           localStorage.setItem('calendar', JSON.stringify(testData));
+            console.log("Saved test data to localStorage.");
+       }
+
+      // 5. Clear local calendar data
       this.events = {};
+      this.blockedDates = {};
+      this.bookedDates = {};
+      console.log("Cleared local calendar data.");
       
-      // 4. Reload and check if the test event exists
+      // 6. Reload data from storage
+      console.log("Reloading data from storage...");
       await this.loadAvailability();
       
-      // 5. Verify the event was loaded correctly
-      if (this.events[testDate] && 
-          this.events[testDate].some(e => e.id === testEvent.id && e.title === testEvent.title)) {
-        console.log('Test successful! Data persistence is working correctly.');
-        
-        // Clean up test event
-        this.events[testDate] = this.events[testDate].filter(e => e.id !== testEvent.id);
-        await this.saveAvailability();
-        
-        return true;
-      } else {
-        console.error('Test failed! Event was not correctly persisted and reloaded.');
-        console.log('Current events for test date:', this.events[testDate]);
-        return false;
+      // 7. Verify the test event was loaded correctly
+      let success = false;
+      if (this.events[testDateStr] && Array.isArray(this.events[testDateStr])) {
+          success = this.events[testDateStr].some(e => e && e.id === testEventId && e.title === testEvent.title);
       }
+      
+      if (success) {
+        console.log('%cTest successful! Data persistence is working correctly.', 'color: green; font-weight: bold;');
+      } else {
+        console.error('%cTest failed! Event was not correctly persisted and reloaded.', 'color: red; font-weight: bold;');
+        console.log('Expected event:', testEvent);
+        console.log('Actual events found for test date:', this.events[testDateStr]);
+      }
+      
+      // 8. Clean up: Restore original data and save it back
+      console.log("Restoring original calendar data...");
+      this.events = originalEvents;
+      this.blockedDates = originalBlocked;
+      // Restore bookedDates if used separately
+      // this.bookedDates = originalBooked; 
+
+      await this.saveAvailability();
+      console.log("Original data restored and saved.");
+
+      // Re-render with restored data
+      this.renderCalendar();
+      this.renderUpcomingBookings();
+        
+      return success; // Return test result
+
     } catch (error) {
-      console.error('Error testing persistence:', error);
-      return false;
+      console.error('Error during persistence test:', error);
+      // Attempt to restore original data even on error
+       try {
+           console.log("Attempting to restore original data after test error...");
+           // Assumes originalEvents/originalBlocked were captured before error
+           if (typeof originalEvents !== 'undefined' && typeof originalBlocked !== 'undefined') {
+               this.events = originalEvents;
+               this.blockedDates = originalBlocked;
+               await this.saveAvailability();
+               console.log("Original data restored after error.");
+               this.renderCalendar();
+               this.renderUpcomingBookings();
+           } else {
+                console.error("Could not restore original data - variables not defined.");
+           }
+       } catch (restoreError) {
+            console.error("Failed to restore original data after test error:", restoreError);
+       }
+      return false; // Test failed due to error
     }
   },
   
   // Ensure data integrity and fix any issues
   async ensureDataIntegrity() {
+    console.log("Starting data integrity check...");
     try {
-      // First, load the data
-      await this.loadAvailability();
+      // Ensure data is loaded first (might be redundant if called after init, but safe)
+      // await this.loadAvailability(); 
+      // ^ Removed redundant load, assuming init calls this first.
       
-      // Check if events property exists and is valid
+      let needsSave = false; // Track if changes were made
+
+      // Check top-level structure
       if (!this.events || typeof this.events !== 'object') {
-        console.warn('Events object is invalid, initializing as empty object');
+        console.warn('Events structure is invalid, re-initializing as {}.');
         this.events = {};
+        needsSave = true;
+      }
+      if (!this.blockedDates || typeof this.blockedDates !== 'object') {
+        console.warn('BlockedDates structure is invalid, re-initializing as {}.');
+        this.blockedDates = {};
+        needsSave = true;
+      }
+       if (!this.bookedDates || typeof this.bookedDates !== 'object') {
+        // Assuming bookedDates might still be used, check it too
+        console.warn('BookedDates structure is invalid, re-initializing as {}.');
+        this.bookedDates = {};
+        needsSave = true;
       }
       
-      // Check each date's events, fix any that aren't arrays
-      let fixedDates = 0;
-      
-      Object.keys(this.events).forEach(dateStr => {
-        if (!Array.isArray(this.events[dateStr])) {
-          console.warn(`Events for date ${dateStr} is not an array:`, this.events[dateStr]);
-          
-          // Try to convert to array if it's a string (JSON)
-          if (typeof this.events[dateStr] === 'string') {
-            try {
-              const parsed = JSON.parse(this.events[dateStr]);
-              if (Array.isArray(parsed)) {
-                this.events[dateStr] = parsed;
-                fixedDates++;
-              } else {
-                this.events[dateStr] = [];
-              }
-            } catch (e) {
-              this.events[dateStr] = [];
-            }
-          } else {
-            // Initialize as empty array
-            this.events[dateStr] = [];
+      // Check events object: Keys should be YYYY-MM-DD, values should be arrays
+      let fixedEventDates = 0;
+      for (const dateStr in this.events) {
+          // Check key format (basic check)
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+               console.warn(`Invalid date key found in events: "${dateStr}". Removing entry.`);
+               delete this.events[dateStr];
+               needsSave = true;
+               continue; // Skip further checks for this invalid key
           }
-        }
-      });
+
+          // Check value type
+          if (!Array.isArray(this.events[dateStr])) {
+            console.warn(`Events for date ${dateStr} is not an array:`, this.events[dateStr]);
+            // Attempt recovery if possible (e.g., from stringified JSON)
+            if (typeof this.events[dateStr] === 'string') {
+                 try {
+                      const parsed = JSON.parse(this.events[dateStr]);
+                      if (Array.isArray(parsed)) {
+                           this.events[dateStr] = parsed;
+                           console.log(`Recovered array from string for ${dateStr}.`);
+                           needsSave = true;
+                      } else {
+                           console.warn(`Parsed string for ${dateStr} was not an array. Resetting to empty array.`);
+                           this.events[dateStr] = [];
+                           needsSave = true;
+                      }
+                 } catch (e) {
+                      console.warn(`Failed to parse string for ${dateStr}. Resetting to empty array.`);
+                      this.events[dateStr] = [];
+                      needsSave = true;
+                 }
+            } else {
+                 console.warn(`Resetting non-array value for ${dateStr} to empty array.`);
+                 this.events[dateStr] = [];
+                 needsSave = true;
+            }
+            fixedEventDates++;
+          }
+      }
       
-      // Fix any invalid event objects in the arrays
+      // Check individual events within arrays
       let fixedEvents = 0;
+      for (const dateStr in this.events) {
+          // We know this.events[dateStr] is an array now (or was skipped)
+          let eventIndex = 0;
+          while (eventIndex < this.events[dateStr].length) {
+              let event = this.events[dateStr][eventIndex];
+              let eventNeedsUpdate = false;
+
+              // Check if event is a valid object
+              if (!event || typeof event !== 'object') {
+                  console.warn(`Invalid event found at index ${eventIndex} for date ${dateStr}:`, event);
+                  // Create a placeholder recovered event
+                  event = {
+                    id: `recovered_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                    date: dateStr, // Assign the correct date
+                    title: 'Recovered Event Data',
+                    description: 'Original data was invalid.',
+                    type: 'regular',
+                    fullDay: true,
+                    recovered: true // Flag as recovered
+                  };
+                  this.events[dateStr][eventIndex] = event; // Replace invalid entry
+                  fixedEvents++;
+                  needsSave = true;
+                  eventNeedsUpdate = true; // Mark for further checks below if needed
+              }
+
+              // Ensure essential properties exist
+              if (!event.id) {
+                  event.id = `event_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+                  console.warn(`Event on ${dateStr} missing ID. Assigned: ${event.id}`);
+                  fixedEvents++;
+                  needsSave = true;
+                  eventNeedsUpdate = true;
+              }
+               if (typeof event.title !== 'string') { // Check type and existence
+                  event.title = 'Untitled Event';
+                  console.warn(`Event ${event.id} on ${dateStr} missing or invalid title. Reset.`);
+                  fixedEvents++;
+                  needsSave = true;
+                  eventNeedsUpdate = true;
+              }
+               if (typeof event.type !== 'string' || !['regular', 'booked', 'blocked'].includes(event.type)) {
+                   console.warn(`Event ${event.id} on ${dateStr} has invalid type "${event.type}". Resetting to "regular".`);
+                   event.type = 'regular';
+                   fixedEvents++;
+                   needsSave = true;
+                   eventNeedsUpdate = true;
+               }
+                if (typeof event.fullDay !== 'boolean') {
+                   console.warn(`Event ${event.id} on ${dateStr} missing or invalid fullDay status. Defaulting to false.`);
+                   event.fullDay = false; // Default to non-full day if unsure
+                   fixedEvents++;
+                   needsSave = true;
+                   eventNeedsUpdate = true;
+               }
+               // If not full day, ensure times exist (or default them)
+               if (!event.fullDay) {
+                    if (typeof event.startTime !== 'string' || !event.startTime.includes(':')) {
+                         console.warn(`Event ${event.id} on ${dateStr} missing or invalid startTime. Defaulting to 09:00.`);
+                         event.startTime = '09:00';
+                         fixedEvents++;
+                         needsSave = true;
+                         eventNeedsUpdate = true;
+                    }
+                     if (typeof event.endTime !== 'string' || !event.endTime.includes(':')) {
+                         console.warn(`Event ${event.id} on ${dateStr} missing or invalid endTime. Defaulting to 10:00.`);
+                         event.endTime = '10:00';
+                         fixedEvents++;
+                         needsSave = true;
+                         eventNeedsUpdate = true;
+                    }
+                     // Basic time validation (ensure end is after start)
+                     if (event.startTime >= event.endTime) {
+                          console.warn(`Event ${event.id} on ${dateStr} has endTime <= startTime (${event.startTime} - ${event.endTime}). Adjusting endTime.`);
+                          // Simple fix: set end time 1 hour after start
+                          const [startH, startM] = event.startTime.split(':').map(Number);
+                          const endH = (startH + 1) % 24;
+                          event.endTime = `${endH.toString().padStart(2,'0')}:${startM.toString().padStart(2,'0')}`;
+                          fixedEvents++;
+                          needsSave = true;
+                          eventNeedsUpdate = true;
+                     }
+               }
+               // Ensure date property matches the key
+               if (event.date !== dateStr) {
+                    console.warn(`Event ${event.id} date property ("${event.date}") does not match its key ("${dateStr}"). Correcting.`);
+                    event.date = dateStr;
+                    fixedEvents++;
+                    needsSave = true;
+                    eventNeedsUpdate = true;
+               }
+
+              // If event was updated, replace it in the array
+              if (eventNeedsUpdate) {
+                  this.events[dateStr][eventIndex] = event;
+              }
+              
+              eventIndex++; // Move to the next event
+          } // End while loop for events on a date
+      } // End for loop through dates
       
-      Object.keys(this.events).forEach(dateStr => {
-        if (Array.isArray(this.events[dateStr])) {
-          this.events[dateStr] = this.events[dateStr].map(event => {
-            if (!event || typeof event !== 'object') {
-              fixedEvents++;
-              return {
-                id: `recovered_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-                date: dateStr,
-                title: 'Recovered Event',
-                description: '',
-                type: 'regular',
-                fullDay: true,
-                startTime: '00:00',
-                endTime: '23:59'
-              };
+      // Check blockedDates object: Keys should be YYYY-MM-DD, values should be strings
+      let fixedBlockedDates = 0;
+      for (const dateStr in this.blockedDates) {
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+               console.warn(`Invalid date key found in blockedDates: "${dateStr}". Removing entry.`);
+               delete this.blockedDates[dateStr];
+               needsSave = true;
+               fixedBlockedDates++;
+               continue;
             }
-            
-            // Ensure all required properties exist
-            if (!event.id) {
-              event.id = `event_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-              fixedEvents++;
+            if (typeof this.blockedDates[dateStr] !== 'string') {
+                 console.warn(`Invalid value for blocked date ${dateStr}:`, this.blockedDates[dateStr], ". Resetting to 'Unavailable'.");
+                 this.blockedDates[dateStr] = 'Unavailable';
+                 needsSave = true;
+                 fixedBlockedDates++;
             }
-            
-            if (!event.title) {
-              event.title = 'Untitled Event';
-              fixedEvents++;
-            }
-            
-            return event;
-          });
-        }
-      });
-      
+      }
+
       // If we fixed anything, save the changes
-      if (fixedDates > 0 || fixedEvents > 0) {
-        console.log(`Fixed ${fixedDates} dates and ${fixedEvents} events. Saving updates...`);
+      if (needsSave) {
+        console.log(`Data integrity check found issues: Fixed ${fixedEventDates} date entries, ${fixedEvents} events, ${fixedBlockedDates} blocked dates. Saving updates...`);
         await this.saveAvailability();
+        console.log("Updates saved successfully.");
+      } else {
+           console.log("Data integrity check completed. No issues found.");
       }
       
-      // Run a persistence test if we had to fix data
-      if (fixedDates > 0 || fixedEvents > 0) {
-        await this.testSaveAndLoad();
-      }
+      // Optional: Run a persistence test if significant fixes were made
+      // if (needsSave && (fixedEventDates > 0 || fixedEvents > 1)) { // Example condition
+      //   console.log("Running persistence test after data fixes...");
+      //   await this.testSaveAndLoad();
+      // }
       
-      console.log('Data integrity check completed.');
-      return true;
+      return true; // Indicate check completed
     } catch (error) {
-      console.error('Error ensuring data integrity:', error);
-      return false;
+      console.error('Error during data integrity check:', error);
+      return false; // Indicate failure
     }
   }
 };
