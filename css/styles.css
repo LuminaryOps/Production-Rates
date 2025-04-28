@@ -312,6 +312,13 @@ select {
   display: flex;
   margin-bottom: 2rem;
   border-bottom: 1px solid var(--gray-300);
+  overflow-x: auto;  /* Allow horizontal scrolling for tabs on mobile */
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none; /* Hide scrollbar for Firefox */
+}
+
+.tabs::-webkit-scrollbar {
+  display: none; /* Hide scrollbar for Chrome/Safari */
 }
 
 .tab {
@@ -321,6 +328,8 @@ select {
   border-bottom: 2px solid transparent;
   color: var(--gray-500);
   transition: var(--transition);
+  white-space: nowrap; /* Prevent tab text from wrapping */
+  flex-shrink: 0; /* Prevent tabs from shrinking */
 }
 
 .tab.active {
@@ -350,6 +359,18 @@ select {
 
 .tab-content.active {
   display: block;
+}
+
+/* Mobile tab styles */
+@media (max-width: 480px) {
+  .tab {
+    padding: 0.75rem 0.85rem;
+    font-size: 0.85rem;
+  }
+  
+  .tab i {
+    margin-right: 0.25rem;
+  }
 }
 
 /* Result Sections */
@@ -705,6 +726,12 @@ input[type="date"] {
   color: var(--gray-600);
 }
 
+.booking-time {
+  font-size: 0.75rem;
+  color: var(--gray-600);
+  margin-top: 0.25rem;
+}
+
 .booking-status {
   display: flex;
   align-items: center;
@@ -714,24 +741,133 @@ input[type="date"] {
   margin-left: 0.5rem;
 }
 
-/* Mobile responsiveness */
+/* Improved mobile responsiveness */
 @media (max-width: 768px) {
+  /* Calendar day cells */
   .calendar-day {
     height: 60px;
     padding: 0.25rem;
+    position: relative;
+    overflow: hidden;
   }
   
+  /* Instead of hiding day content, make it compact */
   .day-content {
-    display: none;
+    display: block;
+    font-size: 0.65rem;
+    position: absolute;
+    top: 20px;
+    left: 4px;
+    right: 4px;
+    bottom: 4px;
+    overflow: hidden;
   }
   
+  /* Make event indicators smaller and more compact */
+  .calendar-day .event-indicator {
+    padding: 1px 2px;
+    margin-bottom: 1px;
+    font-size: 0.6rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    border-radius: 2px;
+  }
+  
+  /* Make day number smaller to save space */
+  .calendar-day .day-number {
+    font-size: 0.8rem;
+    margin-bottom: 0.1rem;
+  }
+  
+  /* Adjust calendar controls for better mobile layout */
   .calendar-controls .row {
     flex-direction: column;
   }
   
   .calendar-controls .col:last-child {
-    margin-top: 1rem;
-    text-align: left;
+    margin-top: 0.5rem;
+    text-align: center;
+  }
+  
+  /* Make buttons in calendar controls smaller and wrap better */
+  .calendar-controls .btn-sm {
+    padding: 0.25rem 0.5rem;
+    font-size: 0.75rem;
+    margin: 0.25rem;
+  }
+  
+  /* Adjust month navigation for smaller screens */
+  .month-nav h3 {
+    font-size: 1rem;
+    margin: 0 0.5rem;
+  }
+  
+  /* Make calendar header text smaller */
+  .calendar-header div {
+    font-size: 0.75rem;
+  }
+  
+  /* For week and day views */
+  .week-container, .day-view-container {
+    font-size: 0.75rem;
+  }
+  
+  .time-event, .day-time-event, .full-day-event {
+    font-size: 0.65rem;
+    padding: 0.15rem;
+  }
+  
+  /* Fix for stacking calendar action buttons */
+  #calendar .card .col:last-child {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  
+  #calendar .card .col:last-child .btn {
+    margin: 0.25rem;
+  }
+  
+  /* View mode buttons */
+  .view-mode-container {
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+}
+
+/* iPhone-specific adjustments */
+@media only screen 
+and (min-device-width: 375px) 
+and (max-device-width: 812px) 
+and (-webkit-min-device-pixel-ratio: 3)
+and (orientation: portrait) {
+  /* Force day content to be visible on iPhone */
+  .day-content {
+    display: block !important;
+    max-height: 40px;
+  }
+  
+  /* Limit to one event indicator visible at a time */
+  .calendar-day .event-indicator:nth-child(n+2) {
+    display: none;
+  }
+  
+  /* Add a small indicator for multiple events */
+  .calendar-day .event-indicator:first-child:after {
+    content: attr(data-count);
+    position: absolute;
+    top: -2px;
+    right: -2px;
+    background: var(--primary);
+    color: white;
+    font-size: 6px;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
   }
 }
 
@@ -1457,4 +1593,47 @@ body.light-mode {
   text-transform: uppercase;
   pointer-events: none;
   z-index: 1;
+}
+
+/* Mobile improvements for buttons, tabs, and history */
+@media (max-width: 480px) {
+  /* Fix for small buttons in calendar tab */
+  #calendar .btn, #blockDateBtn, #exportCalendarBtn {
+    padding: 0.4rem 0.6rem;
+    font-size: 0.75rem;
+    white-space: nowrap;
+  }
+  
+  /* Improve history view on mobile */
+  .history-view-modal-content {
+    padding: 1rem;
+  }
+  
+  .history-actions {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  
+  .history-actions .btn {
+    padding: 0.3rem 0.6rem;
+    font-size: 0.75rem;
+  }
+  
+  /* Fix history view actions */
+  .history-view-actions {
+    flex-wrap: wrap;
+  }
+  
+  .history-view-actions .btn {
+    flex: 1 1 auto;
+    min-width: 110px;
+    padding: 0.5rem;
+    font-size: 0.8rem;
+  }
+  
+  /* General mobile button improvements */
+  .btn-sm {
+    padding: 0.3rem 0.6rem;
+    font-size: 0.75rem;
+  }
 }
