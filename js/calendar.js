@@ -216,7 +216,7 @@ const Calendar = {
     
     // Set up tab click event with PIN protection
     calendarTab.addEventListener('click', () => {
-      PinAuth.verifyPin(() => {
+      PinAuth.verifyPin(async () => {
         // This runs after successful PIN verification
         document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
         document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
@@ -224,7 +224,44 @@ const Calendar = {
         calendarTab.classList.add('active');
         document.getElementById('calendar').classList.add('active');
         
-        // Refresh calendar when tab is shown
+        // First load fresh data from Firebase, then render
+        if (AppState.usingFirebase) {
+          try {
+            console.log('Fetching fresh calendar data from Firebase...');
+            
+            // Show loading indicator if available
+            const calendarContainer = document.querySelector('.calendar-container');
+            if (calendarContainer) {
+              const loadingIndicator = document.createElement('div');
+              loadingIndicator.className = 'loading';
+              loadingIndicator.style.display = 'flex';
+              loadingIndicator.innerHTML = '<div class="loading-spinner"></div><span>Loading calendar data...</span>';
+              calendarContainer.appendChild(loadingIndicator);
+            }
+            
+            // Load fresh data from Firebase
+            const calendarData = await FirebaseStorage.loadCalendarData();
+            
+            // Update the calendar with the fresh data
+            if (calendarData) {
+              this.updateAvailability(calendarData);
+              console.log('Calendar data refreshed from Firebase successfully');
+            }
+            
+            // Remove loading indicator
+            if (calendarContainer) {
+              const loadingIndicator = calendarContainer.querySelector('.loading');
+              if (loadingIndicator) {
+                loadingIndicator.remove();
+              }
+            }
+          } catch (error) {
+            console.error('Error refreshing calendar data:', error);
+            // Still render with existing data in case of error
+          }
+        }
+        
+        // Refresh calendar when tab is shown (now with updated data)
         this.renderCalendar();
         this.renderUpcomingBookings();
         
