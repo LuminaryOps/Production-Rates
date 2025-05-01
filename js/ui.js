@@ -715,9 +715,26 @@ const UI = {
     // Get content to print
     const content = sectionEl.innerHTML;
     
+    // Clone the SVG element and serialize it
+    const svgElement = document.querySelector('svg');
+    const clonedSvg = svgElement.cloneNode(true);
+    // Ensure cloned SVG has necessary classes for proper styling
+    clonedSvg.classList.add('luminary-ops-icon'); 
+
+    // Set fill attribute to currentColor to inherit text color
+    clonedSvg.setAttribute('fill', 'currentColor');
+
+    const svgString = new XMLSerializer().serializeToString(clonedSvg);
+
+    // Add a log to check if the svg is being populated
+    console.log('SVG String:', svgString);
+    
     // Create a new window for printing
     const printWindow = window.open('', '_blank', 'width=800,height=600');
     
+
+    
+
     // Get all stylesheets from the document
     const styleLinks = Array.from(document.querySelectorAll('link[rel="stylesheet"]'))
       .map(link => `<link rel="stylesheet" href="${link.href}">`).join('');
@@ -727,6 +744,14 @@ const UI = {
       .map(style => `<style>${style.innerHTML}</style>`).join('');
     
     // Write the document with proper styling
+    // Ensure proper inline styles for the SVG
+    const svgStyles = `
+    .luminary-ops-icon {
+      width: 150px;
+      height: auto;
+      margin-bottom: 20px;
+      display: block;
+    }`;
     printWindow.document.write(`
       <!DOCTYPE html>
       <html>
@@ -736,6 +761,7 @@ const UI = {
         ${inlineStyles}
         <style>
           @media print {
+          ${svgStyles}
             body {
               padding: 0;
               margin: 0;
@@ -775,12 +801,15 @@ const UI = {
         </style>
       </head>
       <body>
+      <style>${svgStyles}</style>
         <div class="container">
+          ${svgString} 
           <div class="result-section" style="display: block;">
             ${content}
           </div>
         </div>
         <script>
+          
           // Execute print once everything has loaded
           window.onload = function() {
             // Small delay to ensure styles are applied
