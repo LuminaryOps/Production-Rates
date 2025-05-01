@@ -1138,6 +1138,52 @@ input:checked + .slider:before {
   opacity: 1;
 }
 
+/* Invoice from Event Modal Styles */
+.invoice-from-event-modal {
+  z-index: 1000;
+}
+
+.invoice-from-event-modal .modal-content {
+  max-width: 600px;
+}
+
+/* Make custom days row responsive */
+#eventCustomDaysRow {
+  flex-wrap: wrap;
+}
+
+/* Improved validation styles */
+#invoiceFromEventForm input:invalid,
+#invoiceFromEventForm select:invalid {
+  border-color: var(--danger);
+  box-shadow: 0 0 0 1px var(--danger);
+}
+
+#invoiceFromEventForm input:focus:invalid,
+#invoiceFromEventForm select:focus:invalid {
+  box-shadow: 0 0 0 3px rgba(255, 71, 87, 0.25);
+}
+
+/* Mobile responsiveness */
+@media (max-width: 768px) {
+  .invoice-from-event-modal .modal-content {
+    padding: 1.5rem;
+  }
+  
+  .invoice-from-event-modal h3 {
+    font-size: 1.25rem;
+  }
+  
+  .invoice-from-event-modal .btn-group {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  
+  .invoice-from-event-modal .btn {
+    width: 100%;
+  }
+}
+
 /* Dark Mode Toggle */
 .dark-mode-toggle {
   position: fixed;
