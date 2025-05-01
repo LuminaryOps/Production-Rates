@@ -1899,6 +1899,9 @@ const Calendar = {
   
   // Show event creation/edit modal
   showEventModal(date = null, eventData = null) { // date should be a Date object
+    // Store current event data as an object property
+    this.currentEventData = eventData;
+    
     // Ensure 'date' is a valid Date object, default to today if not
     let currentEventDate;
     if (date instanceof Date && !isNaN(date)) {
@@ -1908,7 +1911,7 @@ const Calendar = {
         currentEventDate = new Date();
         currentEventDate.setHours(0, 0, 0, 0); // Normalize to start of day
     }
-
+  
     // Format date string for input field (YYYY-MM-DD)
     const dateStr = currentEventDate.toISOString().split('T')[0];
     // Format date for display
@@ -2252,7 +2255,7 @@ const Calendar = {
     const form = this.eventModal.querySelector('#eventForm');
     const fullDay = form.querySelector('#eventFullDay').checked;
     const saveButton = form.querySelector('button[type="submit"]');
-
+  
     // Explicitly re-validate before saving
     if (!fullDay && !this.validateEventTimes()) {
         console.error("Attempted to save with invalid times.");
@@ -2287,7 +2290,7 @@ const Calendar = {
            return false;
        }
     }
-
+  
     // Find the original date if editing
     const existingEventId = form.querySelector('#eventId').value;
     let originalDateStr = null;
@@ -2317,7 +2320,7 @@ const Calendar = {
         }
         originalEventIndex = -1; // Reset index as it's now in a new array (potentially)
     }
-
+  
     // Create the event object
     const event = {
         id: eventId,
@@ -2329,15 +2332,15 @@ const Calendar = {
         // Only include time if not full day
         ...( !fullDay && { startTime, endTime } ),
         // Preserve client data if it exists
-        ...( eventData?.clientData && { clientData: eventData.clientData } ) 
+        ...( this.currentEventData?.clientData && { clientData: this.currentEventData.clientData } ) 
     };
-
+  
     // Handle specific logic for 'blocked' type
     if (eventType === 'blocked' && fullDay) {
         // Add to blockedDates dictionary
         this.blockedDates[newDateStr] = event.title;
         console.log(`Blocking date ${newDateStr} with reason: ${event.title}`);
-
+  
         // If this was previously a different type of event on this date, remove it from events list
         if (this.events[newDateStr]) {
              this.events[newDateStr] = this.events[newDateStr].filter(e => e.id !== eventId);
@@ -2354,10 +2357,10 @@ const Calendar = {
             console.warn(`Correcting non-array events for ${newDateStr}`);
             this.events[newDateStr] = []; // Initialize if corrupt
         }
-
+  
         // Find if event already exists on the *new* date
         let existingIndexOnNewDate = this.events[newDateStr].findIndex(e => e && e.id === eventId);
-
+  
         if (existingIndexOnNewDate !== -1) {
             // Update existing event on the potentially new date
             console.log(`Updating event ${eventId} on date ${newDateStr}`);
@@ -2367,14 +2370,15 @@ const Calendar = {
             console.log(`Adding new event ${eventId} to date ${newDateStr}`);
             this.events[newDateStr].push(event);
         }
-
+  
         // If it was previously blocked, unblock the date
         if (this.blockedDates[newDateStr] && eventType !== 'blocked') {
              console.log(`Unblocking date ${newDateStr} as event type changed.`);
              delete this.blockedDates[newDateStr];
         }
          // Also unblock the *original* date if the event moved *and* was blocking
-         if (originalDateStr && originalDateStr !== newDateStr && this.blockedDates[originalDateStr] && eventData?.type === 'blocked' && eventData?.fullDay) {
+         if (originalDateStr && originalDateStr !== newDateStr && this.blockedDates[originalDateStr] && 
+             this.currentEventData?.type === 'blocked' && this.currentEventData?.fullDay) {
              console.log(`Unblocking original date ${originalDateStr} as blocking event moved.`);
              delete this.blockedDates[originalDateStr];
          }
@@ -2393,9 +2397,9 @@ const Calendar = {
         
         // Optionally show a success notification
         // Utils.showNotification('Event saved successfully!', 'success');
-
+  
         return true;
-
+  
     } catch (error) {
         console.error("Error saving availability after saving event:", error);
         // Show error notification to user
@@ -3979,114 +3983,6 @@ const Calendar = {
     }
   },
   
-  // Add data integrity verification and repair functions
-  
-  // Test persistence to verify data is saving/loading correctly
-  async testSaveAndLoad() {
-    try {
-      console.log('Testing calendar data persistence...');
-      
-      // 1. Store current state to restore later
-      const originalEvents = JSON.parse(JSON.stringify(this.events));
-      const originalBlocked = JSON.parse(JSON.stringify(this.blockedDates));
-
-      // 2. Create a unique test event
-      const testDateStr = new Date().toISOString().split('T')[0];
-      const testEventId = `test_event_${Date.now()}`;
-      const testEvent = {
-        id: testEventId,
-        date: testDateStr,
-        title: `Test Event ${new Date().toLocaleTimeString()}`,
-        description: 'This is a test event to validate storage',
-        type: 'regular',
-        fullDay: true
-      };
-      
-      // 3. Add test event to a temporary copy
-      let testEvents = JSON.parse(JSON.stringify(this.events));
-      if (!testEvents[testDateStr]) {
-        testEvents[testDateStr] = [];
-      }
-       // Ensure array before push
-       if (!Array.isArray(testEvents[testDateStr])) testEvents[testDateStr] = [];
-      testEvents[testDateStr].push(testEvent);
-      
-      // 4. Save this temporary state
-      console.log('Saving test event:', testEvent);
-      const testData = { events: testEvents, blockedDates: this.blockedDates, bookedDates: this.bookedDates };
-      
-      // Determine save method (Firebase or localStorage)
-       if (AppState.usingFirebase) {
-           await FirebaseStorage.saveCalendarData(testData);
-           console.log("Saved test data to Firebase.");
-       } else {
-           localStorage.setItem('calendar', JSON.stringify(testData));
-            console.log("Saved test data to localStorage.");
-       }
-
-      // 5. Clear local calendar data
-      this.events = {};
-      this.blockedDates = {};
-      this.bookedDates = {};
-      console.log("Cleared local calendar data.");
-      
-      // 6. Reload data from storage
-      console.log("Reloading data from storage...");
-      await this.loadAvailability();
-      
-      // 7. Verify the test event was loaded correctly
-      let success = false;
-      if (this.events[testDateStr] && Array.isArray(this.events[testDateStr])) {
-          success = this.events[testDateStr].some(e => e && e.id === testEventId && e.title === testEvent.title);
-      }
-      
-      if (success) {
-        console.log('%cTest successful! Data persistence is working correctly.', 'color: green; font-weight: bold;');
-      } else {
-        console.error('%cTest failed! Event was not correctly persisted and reloaded.', 'color: red; font-weight: bold;');
-        console.log('Expected event:', testEvent);
-        console.log('Actual events found for test date:', this.events[testDateStr]);
-      }
-      
-      // 8. Clean up: Restore original data and save it back
-      console.log("Restoring original calendar data...");
-      this.events = originalEvents;
-      this.blockedDates = originalBlocked;
-      // Restore bookedDates if used separately
-      // this.bookedDates = originalBooked; 
-
-      await this.saveAvailability();
-      console.log("Original data restored and saved.");
-
-      // Re-render with restored data
-      this.renderCalendar();
-      this.renderUpcomingBookings();
-        
-      return success; // Return test result
-
-    } catch (error) {
-      console.error('Error during persistence test:', error);
-      // Attempt to restore original data even on error
-       try {
-           console.log("Attempting to restore original data after test error...");
-           // Assumes originalEvents/originalBlocked were captured before error
-           if (typeof originalEvents !== 'undefined' && typeof originalBlocked !== 'undefined') {
-               this.events = originalEvents;
-               this.blockedDates = originalBlocked;
-               await this.saveAvailability();
-               console.log("Original data restored after error.");
-               this.renderCalendar();
-               this.renderUpcomingBookings();
-           } else {
-                console.error("Could not restore original data - variables not defined.");
-           }
-       } catch (restoreError) {
-            console.error("Failed to restore original data after test error:", restoreError);
-       }
-      return false; // Test failed due to error
-    }
-  },
-  
   // Ensure data integrity and fix any issues
   async ensureDataIntegrity() {
     console.log("Starting data integrity check...");
@@ -4285,12 +4181,6 @@ const Calendar = {
       } else {
            console.log("Data integrity check completed. No issues found.");
       }
-      
-      // Optional: Run a persistence test if significant fixes were made
-      // if (needsSave && (fixedEventDates > 0 || fixedEvents > 1)) { // Example condition
-      //   console.log("Running persistence test after data fixes...");
-      //   await this.testSaveAndLoad();
-      // }
       
       return true; // Indicate check completed
     } catch (error) {
