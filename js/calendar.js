@@ -2532,7 +2532,7 @@ const Calendar = {
     this.showEventModal(eventDateObject, validatedEvent); // Pass Date object and validated data
   },
   
-  // Show booking details modal with cancel option
+  // Updated showBookingDetailsModal function that prevents duplicate buttons
   showBookingDetailsModal(event, eventDateObject) { // Accepts validated event and Date object
     // Create modal if it doesn't exist
     if (!this.bookingDetailsModal) {
@@ -2598,22 +2598,65 @@ const Calendar = {
     modal.dataset.eventId = event.id;
     modal.dataset.eventDateStr = event.date; // Store the original date string
     
-    // Show the cancel button
-    const cancelBtn = modalContent.querySelector('#cancelBookingBtn');
-    cancelBtn.style.display = 'inline-block'; // Use inline-block for btn-group
+    // IMPORTANT: Reset the button group to avoid duplicate buttons
+    const btnGroup = modalContent.querySelector('.btn-group');
+    btnGroup.innerHTML = '';
     
-    // Show edit button
-    const editBtn = modalContent.querySelector('#editBookingBtn');
-    editBtn.style.display = 'inline-block'; // Use inline-block
-      
-    // Remove previous event listeners and add new one for EDIT
-    const newEditBtn = editBtn.cloneNode(true); // Clone to remove listeners
-    editBtn.parentNode.replaceChild(newEditBtn, editBtn);
-    newEditBtn.addEventListener('click', () => {
-        modal.style.display = 'none';
-        // Pass the Date object and event data to the edit modal
-        this.showEventModal(eventDateObject, event); 
+    // Add all buttons in the correct order
+    
+    // 1. Close button
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.id = 'closeBookingDetailsBtn';
+    closeBtn.className = 'btn btn-outline';
+    closeBtn.innerHTML = '<i class="fas fa-times"></i> Close';
+    closeBtn.addEventListener('click', () => {
+      modal.style.display = 'none';
     });
+    btnGroup.appendChild(closeBtn);
+    
+    // 2. Cancel booking button
+    const cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.id = 'cancelBookingBtn';
+    cancelBtn.className = 'btn btn-danger';
+    cancelBtn.innerHTML = '<i class="fas fa-ban"></i> Cancel Booking';
+    cancelBtn.addEventListener('click', () => {
+      // Retrieve stored data
+      const eventId = modal.dataset.eventId;
+      const eventDateStr = modal.dataset.eventDateStr; 
+      if (eventId && eventDateStr) {
+          this.handleCancelBooking(eventId, eventDateStr);
+          modal.style.display = 'none';
+      } else {
+          console.error("Could not cancel booking: event ID or date string missing from modal data.");
+      }
+    });
+    btnGroup.appendChild(cancelBtn);
+    
+    // 3. Edit button
+    const editBtn = document.createElement('button');
+    editBtn.type = 'button';
+    editBtn.id = 'editBookingBtn';
+    editBtn.className = 'btn btn-primary';
+    editBtn.innerHTML = '<i class="fas fa-edit"></i> Edit';
+    editBtn.addEventListener('click', () => {
+      modal.style.display = 'none';
+      // Pass the Date object and event data to the edit modal
+      this.showEventModal(eventDateObject, event);
+    });
+    btnGroup.appendChild(editBtn);
+    
+    // 4. Create Invoice button
+    const createInvoiceBtn = document.createElement('button');
+    createInvoiceBtn.id = 'createInvoiceFromEventBtn';
+    createInvoiceBtn.className = 'btn btn-primary';
+    createInvoiceBtn.innerHTML = '<i class="fas fa-file-invoice-dollar"></i> Create Invoice';
+    createInvoiceBtn.addEventListener('click', () => {
+      modal.style.display = 'none'; // Hide booking details modal
+      this.showInvoiceFromEventModal(event); // Show invoice creation modal with the event data
+    });
+    btnGroup.appendChild(createInvoiceBtn);
     
     // Show the modal
     modal.style.display = 'flex';
@@ -2804,6 +2847,429 @@ const Calendar = {
       }
     }
   },
+
+// Create invoice modal for calendar events
+showInvoiceFromEventModal(event) {
+  // Create modal if it doesn't exist
+  if (!this.invoiceFromEventModal) {
+    this.createInvoiceFromEventModal();
+  }
+  
+  const modal = this.invoiceFromEventModal;
+  const form = modal.querySelector('#invoiceFromEventForm');
+  
+  // Reset form
+  form.reset();
+  
+  // Store event data for reference
+  modal.dataset.eventId = event.id;
+  modal.dataset.eventDate = event.date;
+  
+  // Pre-fill client and project info if available
+  if (event.clientData) {
+    form.querySelector('#eventClientName').value = event.clientData.clientName || event.title;
+    form.querySelector('#eventProjectName').value = event.clientData.projectName || '';
+    form.querySelector('#eventProjectLocation').value = event.clientData.projectLocation || '';
+  } else {
+    form.querySelector('#eventClientName').value = event.title;
+    form.querySelector('#eventProjectName').value = event.description || '';
+    form.querySelector('#eventProjectLocation').value = '';
+  }
+  
+  // Set start and end dates
+  let startDate, endDate;
+  
+  if (event.clientData && event.clientData.projectStartDate && event.clientData.projectEndDate) {
+    // Use project date range if available
+    startDate = this.parseLocalDate(event.clientData.projectStartDate);
+    endDate = this.parseLocalDate(event.clientData.projectEndDate);
+  } else {
+    // Use single event date
+    startDate = this.parseLocalDate(event.date);
+    endDate = this.parseLocalDate(event.date);
+  }
+  
+  // Calculate number of days
+  const daysDiff = Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24)) + 1;
+  
+  // Update number of days field
+  form.querySelector('#eventDays').value = daysDiff;
+  
+  // Show the modal
+  modal.style.display = 'flex';
+},
+
+// Create the invoice from event modal
+createInvoiceFromEventModal() {
+  // Create modal element
+  const modal = document.createElement('div');
+  modal.className = 'invoice-from-event-modal';
+  modal.style.cssText = `
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.7);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 1rem;
+  `;
+  
+  // Create modal content
+  const content = document.createElement('div');
+  content.className = 'modal-content';
+  content.style.cssText = `
+    background-color: var(--card-bg);
+    border-radius: var(--border-radius);
+    box-shadow: var(--shadow-lg);
+    width: 100%;
+    max-width: 600px;
+    max-height: 90vh;
+    overflow-y: auto;
+    padding: 2rem;
+    position: relative;
+  `;
+  
+  // Add close button
+  const closeBtn = document.createElement('div');
+  closeBtn.className = 'modal-close';
+  closeBtn.innerHTML = '<i class="fas fa-times"></i>';
+  closeBtn.style.cssText = `
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    cursor: pointer;
+    font-size: 1.25rem;
+    color: var(--gray-500);
+  `;
+  closeBtn.addEventListener('click', () => {
+    modal.style.display = 'none';
+  });
+  
+  // Create form
+  const form = document.createElement('form');
+  form.id = 'invoiceFromEventForm';
+  form.addEventListener('submit', (e) => {
+    e.preventDefault();
+    this.generateInvoiceFromEvent();
+  });
+  
+  // Form content
+  form.innerHTML = `
+    <h3 style="margin-bottom: 1.5rem; text-align: center;">Create Invoice from Booking</h3>
+    
+    <div class="row">
+      <div class="col">
+        <div class="form-group">
+          <label for="eventServiceType">Service Type</label>
+          <select id="eventServiceType" required>
+            <option value="single">Single Role Technician</option>
+            <option value="multi">Multi-Role Technician</option>
+            <option value="director">Technical Director</option>
+          </select>
+        </div>
+      </div>
+      <div class="col">
+        <div class="form-group">
+          <label for="eventDurationType">Duration</label>
+          <select id="eventDurationType" required>
+            <option value="full">Full Day (10 hrs)</option>
+            <option value="half">Half Day (5 hrs)</option>
+            <option value="custom">Custom Days</option>
+            <option value="2day">2-Day Package</option>
+            <option value="3day">3-Day Package</option>
+            <option value="5day">5-Day Package</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    
+    <div class="row" id="eventCustomDaysRow">
+      <div class="col">
+        <div class="form-group">
+          <label for="eventDays">Number of Days</label>
+          <input type="number" id="eventDays" min="1" value="1">
+        </div>
+      </div>
+      <div class="col">
+        <div class="form-group">
+          <label for="eventAdditionalHours">Overtime Hours</label>
+          <input type="number" id="eventAdditionalHours" min="0" value="0">
+        </div>
+      </div>
+    </div>
+    
+    <div class="row">
+      <div class="col">
+        <div class="form-group">
+          <label for="eventClientType">Client Type</label>
+          <select id="eventClientType" required>
+            <option value="regular">Regular</option>
+            <option value="new">First-Time (10% off)</option>
+            <option value="partner5">Partner 5-7 days/mo (10%)</option>
+            <option value="partner8">Partner 8+ days/mo (15%)</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    
+    <div class="row">
+      <div class="col">
+        <div class="form-group">
+          <label for="eventClientName">Client Name</label>
+          <input type="text" id="eventClientName" required>
+        </div>
+      </div>
+    </div>
+    
+    <div class="row">
+      <div class="col">
+        <div class="form-group">
+          <label for="eventProjectName">Project Name</label>
+          <input type="text" id="eventProjectName" required>
+        </div>
+      </div>
+      <div class="col">
+        <div class="form-group">
+          <label for="eventProjectLocation">Location (optional)</label>
+          <input type="text" id="eventProjectLocation">
+        </div>
+      </div>
+    </div>
+    
+    <div class="row">
+      <div class="col">
+        <div class="form-group">
+          <div class="switch-container">
+            <label class="switch">
+              <input type="checkbox" id="eventDepositPaid">
+              <span class="slider"></span>
+            </label>
+            <span class="switch-label">Deposit Already Paid</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <div class="btn-group" style="justify-content: flex-end; margin-top: 1.5rem;">
+      <button type="button" id="cancelInvoiceBtn" class="btn btn-outline">Cancel</button>
+      <button type="submit" class="btn btn-primary">
+        <i class="fas fa-file-invoice-dollar"></i> Generate Invoice
+      </button>
+    </div>
+  `;
+  
+  // Add everything to DOM
+  content.appendChild(closeBtn);
+  content.appendChild(form);
+  modal.appendChild(content);
+  document.body.appendChild(modal);
+  
+  // Add event listeners
+  const durationType = form.querySelector('#eventDurationType');
+  const customDaysRow = form.querySelector('#eventCustomDaysRow');
+  const daysInput = form.querySelector('#eventDays');
+  const cancelBtn = form.querySelector('#cancelInvoiceBtn');
+  
+  // Toggle custom days visibility based on duration type
+  durationType.addEventListener('change', () => {
+    const selectedValue = durationType.value;
+    if (selectedValue === 'custom') {
+      customDaysRow.style.display = 'flex';
+    } else if (selectedValue === 'full' || selectedValue === 'half') {
+      customDaysRow.style.display = 'flex';
+      daysInput.value = 1; // Reset to 1 day for full/half day
+    } else {
+      // For package options (2day, 3day, 5day)
+      customDaysRow.style.display = 'flex';
+      daysInput.value = parseInt(selectedValue); // Set days based on package
+    }
+  });
+  
+  // Handle cancel button
+  cancelBtn.addEventListener('click', () => {
+    modal.style.display = 'none';
+  });
+  
+  // Store modal reference
+  this.invoiceFromEventModal = modal;
+},
+
+// Generate invoice from event data
+generateInvoiceFromEvent() {
+  const modal = this.invoiceFromEventModal;
+  const form = modal.querySelector('#invoiceFromEventForm');
+  
+  // Get event data
+  const eventId = modal.dataset.eventId;
+  const eventDate = modal.dataset.eventDate;
+  
+  // Get form values
+  const serviceType = form.querySelector('#eventServiceType').value;
+  const durationType = form.querySelector('#eventDurationType').value;
+  const days = parseInt(form.querySelector('#eventDays').value) || 1;
+  const additionalHours = parseInt(form.querySelector('#eventAdditionalHours').value) || 0;
+  const clientType = form.querySelector('#eventClientType').value;
+  const clientName = form.querySelector('#eventClientName').value.trim();
+  const projectName = form.querySelector('#eventProjectName').value.trim();
+  const projectLocation = form.querySelector('#eventProjectLocation').value.trim();
+  const depositPaid = form.querySelector('#eventDepositPaid').checked;
+  
+  // Validate required fields
+  if (!clientName || !projectName) {
+    alert('Please fill in all required fields');
+    return;
+  }
+  
+  // Create quote data structure for the calculator
+  AppState.quoteData = {
+    serviceType,
+    durationType,
+    days,
+    additionalHours,
+    clientType,
+    client: clientName,
+    project: {
+      name: projectName,
+      location: projectLocation
+    }
+  };
+  
+  // Set client and project in form elements for calculator
+  document.getElementById('serviceType').value = serviceType;
+  document.getElementById('durationType').value = durationType;
+  document.getElementById('additionalHours').value = additionalHours;
+  document.getElementById('clientType').value = clientType;
+  document.getElementById('clientName').value = clientName;
+  document.getElementById('projectName').value = projectName;
+  document.getElementById('projectLocation').value = projectLocation;
+  
+  // For custom days
+  if (durationType === 'custom') {
+    document.getElementById('customDays').value = days;
+  }
+  
+  // Calculate the quote using existing calculator code
+  AppState.quoteData = Calculator.calculateQuote();
+  
+  // Store the result in the app state
+  AppState.quoteTotal = AppState.quoteData.total;
+  
+  // Calculate deposit
+  AppState.depositPercentage = AppState.rates.depositRates[clientType];
+  AppState.depositAmount = Math.round(AppState.quoteTotal * AppState.depositPercentage);
+  
+  // Close the modal
+  modal.style.display = 'none';
+  
+  // Switch to calculator tab
+  document.querySelector('.tab[data-tab="calculator"]').click();
+  
+  // Hide loading indicator
+  document.getElementById('loadingIndicator').style.display = 'none';
+  
+  // Hide quote section
+  document.getElementById('quoteSection').style.display = 'none';
+  
+  // Generate invoice with appropriate details
+  this.createInvoice(depositPaid);
+},
+
+// Helper to create the invoice using the UI module
+createInvoice(depositPaid) {
+  // Build invoice number with current date format YYYYMMDD-XXX
+  const now = new Date();
+  const dateStr = now.getFullYear() + 
+                (now.getMonth() + 1).toString().padStart(2, '0') + 
+                now.getDate().toString().padStart(2, '0');
+  
+  const defaultInvoiceNum = `INV-${dateStr}-001`;
+  const invoiceNum = prompt('Enter Invoice Number:', defaultInvoiceNum) || defaultInvoiceNum;
+  
+  // Get client name
+  const clientName = document.getElementById('clientName').value.trim();
+  
+  // Set invoice display fields
+  const invoiceClientElement = document.getElementById('invoiceClient');
+  invoiceClientElement.textContent = clientName;
+  
+  document.getElementById('invoiceProject').textContent = document.getElementById('projectName').value.trim();
+  document.getElementById('invoiceNumber').textContent = invoiceNum;
+  
+  // Set invoice date
+  const dateOptions = { year: 'numeric', month: 'long', day: 'numeric' };
+  const formattedDate = now.toLocaleDateString('en-US', dateOptions);
+  document.getElementById('invoiceDate').textContent = formattedDate;
+  
+  // Set datetime
+  const timeOptions = { hour: '2-digit', minute: '2-digit' };
+  const formattedDateTime = `Created on ${formattedDate} at ${now.toLocaleTimeString('en-US', timeOptions)}`;
+  document.getElementById('invoiceDateTime').textContent = formattedDateTime;
+  
+  // Generate invoice data
+  const invoiceData = Calculator.generateInvoice(AppState.quoteData, {
+    invoiceNumber: invoiceNum,
+    date: formattedDate,
+    dateTime: formattedDateTime,
+    client: clientName,
+    depositPaid: depositPaid
+  });
+  
+  AppState.invoiceData = invoiceData;
+  
+  // Clone quote rows
+  const invoiceBody = document.getElementById('invoiceBody');
+  invoiceBody.innerHTML = '';
+  
+  const quoteBody = document.getElementById('quoteBody');
+  let subtotal = 0;
+  
+  Array.from(quoteBody.children).forEach(row => {
+    const service = row.cells[0].textContent;
+    if (service === 'Quote Date' || service === 'Quote Valid Until') return;
+    
+    const clone = row.cloneNode(true);
+    invoiceBody.appendChild(clone);
+    
+    if (service !== 'TOTAL') {
+      const amt = parseFloat(clone.cells[3].textContent.replace(/[^0-9.-]/g, '')) || 0;
+      subtotal += amt;
+    }
+  });
+  
+  // Set summary amounts
+  document.getElementById('invoiceSubtotal').textContent = Calculator.formatCurrency(subtotal);
+  
+  // Handle deposit
+  const depositRow = document.getElementById('depositRow');
+  const invoiceDeposit = document.getElementById('invoiceDeposit');
+  const invoiceTotal = document.getElementById('invoiceTotal');
+  
+  if (depositPaid) {
+    depositRow.style.display = 'flex';
+    invoiceDeposit.textContent = `- ${Calculator.formatCurrency(AppState.depositAmount)}`;
+    invoiceTotal.textContent = Calculator.formatCurrency(subtotal - AppState.depositAmount);
+    AppState.isPaid = true;
+  } else {
+    depositRow.style.display = 'none';
+    invoiceTotal.textContent = Calculator.formatCurrency(subtotal);
+    AppState.isPaid = false;
+  }
+  
+  // Show invoice section
+  document.getElementById('invoiceSection').style.display = 'block';
+  
+  // Add payment buttons using the existing Payment module
+  UI.addPaymentButtons(depositPaid);
+  
+  // Save invoice to history
+  setTimeout(() => {
+    History.saveInvoice();
+  }, 500);
+},
   
   // Show cancellation notification
   showCancellationNotification(title) {
