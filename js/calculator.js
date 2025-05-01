@@ -22,9 +22,20 @@ const Calculator = {
     const includeTravel = document.getElementById('includeTravel').checked;
     const travelDays = includeTravel ? parseInt(document.getElementById('travelDays').value) || 0 : 0;
     
+    
     // Get client and project info
     const clientName = document.getElementById('clientName').value.trim();
+    if (clientName === "") {
+      alert("Client Name is required.");
+      return;
+    }
+
+    
     const projectName = document.getElementById('projectName').value.trim();
+    if (projectName === "") {
+      alert("Project Name is required.");
+      return;
+    }
     const projectLocation = document.getElementById('projectLocation').value.trim();
     
     // Format date
