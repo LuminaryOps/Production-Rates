@@ -3220,55 +3220,91 @@ createInvoice(depositPaid) {
   
   AppState.invoiceData = invoiceData;
   
-  // Clone quote rows
-  const invoiceBody = document.getElementById('invoiceBody');
-  invoiceBody.innerHTML = '';
-  
+  // IMPORTANT FIX: Render the quote to the DOM first
+  // Get the quote section and make sure it's in the DOM (but invisible)
+  const quoteSection = document.getElementById('quoteSection');
   const quoteBody = document.getElementById('quoteBody');
-  let subtotal = 0;
   
-  Array.from(quoteBody.children).forEach(row => {
-    const service = row.cells[0].textContent;
-    if (service === 'Quote Date' || service === 'Quote Valid Until') return;
-    
-    const clone = row.cloneNode(true);
-    invoiceBody.appendChild(clone);
-    
-    if (service !== 'TOTAL') {
-      const amt = parseFloat(clone.cells[3].textContent.replace(/[^0-9.-]/g, '')) || 0;
-      subtotal += amt;
-    }
-  });
+  // Clear existing content
+  quoteBody.innerHTML = '';
   
-  // Set summary amounts
-  document.getElementById('invoiceSubtotal').textContent = Calculator.formatCurrency(subtotal);
-  
-  // Handle deposit
-  const depositRow = document.getElementById('depositRow');
-  const invoiceDeposit = document.getElementById('invoiceDeposit');
-  const invoiceTotal = document.getElementById('invoiceTotal');
-  
-  if (depositPaid) {
-    depositRow.style.display = 'flex';
-    invoiceDeposit.textContent = `- ${Calculator.formatCurrency(AppState.depositAmount)}`;
-    invoiceTotal.textContent = Calculator.formatCurrency(subtotal - AppState.depositAmount);
-    AppState.isPaid = true;
-  } else {
-    depositRow.style.display = 'none';
-    invoiceTotal.textContent = Calculator.formatCurrency(subtotal);
-    AppState.isPaid = false;
+  // Render the quote rows to the DOM (using a simplified version of UI.renderQuote logic)
+  if (AppState.quoteData && AppState.quoteData.rows) {
+    AppState.quoteData.rows.forEach(r => {
+      const tr = document.createElement('tr');
+      r.forEach((cell, i) => {
+        const td = document.createElement('td');
+        td.innerHTML = i === 3 && typeof cell === 'number' ? Calculator.formatCurrency(cell) : cell;
+        tr.appendChild(td);
+      });
+      if (r[0] === 'TOTAL') tr.classList.add('total-row');
+      quoteBody.appendChild(tr);
+    });
   }
   
-  // Show invoice section
-  document.getElementById('invoiceSection').style.display = 'block';
+  // Make sure the quote section is in the DOM but not visible to the user
+  quoteSection.style.display = 'block';
+  quoteSection.style.visibility = 'hidden';
+  quoteSection.style.position = 'absolute';
+  quoteSection.style.zIndex = '-1000';
   
-  // Add payment buttons using the existing Payment module
-  UI.addPaymentButtons(depositPaid);
-  
-  // Save invoice to history
+  // Allow a brief moment for the DOM to update
   setTimeout(() => {
-    History.saveInvoice();
-  }, 500);
+    // Now the quoteBody has all the rows, so we can clone them
+    const invoiceBody = document.getElementById('invoiceBody');
+    invoiceBody.innerHTML = '';
+    
+    let subtotal = 0;
+    
+    Array.from(quoteBody.children).forEach(row => {
+      const service = row.cells[0].textContent;
+      if (service === 'Quote Date' || service === 'Quote Valid Until') return;
+      
+      const clone = row.cloneNode(true);
+      invoiceBody.appendChild(clone);
+      
+      if (service !== 'TOTAL') {
+        const amt = parseFloat(clone.cells[3].textContent.replace(/[^0-9.-]/g, '')) || 0;
+        subtotal += amt;
+      }
+    });
+    
+    // Set summary amounts
+    document.getElementById('invoiceSubtotal').textContent = Calculator.formatCurrency(subtotal);
+    
+    // Handle deposit
+    const depositRow = document.getElementById('depositRow');
+    const invoiceDeposit = document.getElementById('invoiceDeposit');
+    const invoiceTotal = document.getElementById('invoiceTotal');
+    
+    if (depositPaid) {
+      depositRow.style.display = 'flex';
+      invoiceDeposit.textContent = `- ${Calculator.formatCurrency(AppState.depositAmount)}`;
+      invoiceTotal.textContent = Calculator.formatCurrency(subtotal - AppState.depositAmount);
+      AppState.isPaid = true;
+    } else {
+      depositRow.style.display = 'none';
+      invoiceTotal.textContent = Calculator.formatCurrency(subtotal);
+      AppState.isPaid = false;
+    }
+    
+    // Show invoice section
+    document.getElementById('invoiceSection').style.display = 'block';
+    
+    // Clean up the temporary quote rendering
+    quoteSection.style.display = 'none';
+    quoteSection.style.visibility = '';
+    quoteSection.style.position = '';
+    quoteSection.style.zIndex = '';
+    
+    // Add payment buttons using the existing Payment module
+    UI.addPaymentButtons(depositPaid);
+    
+    // Save invoice to history
+    setTimeout(() => {
+      History.saveInvoice();
+    }, 500);
+  }, 50); // 50ms should be enough for the DOM to update
 },
   
   // Show cancellation notification
